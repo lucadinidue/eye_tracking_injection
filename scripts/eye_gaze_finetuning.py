@@ -47,15 +47,16 @@ def main():
                     remove_columns=['text'],
                     desc="Running tokenizer on train dataset",
                     )
-    
-    num_epoch_steps = len(tokenized_train_dataset)/args.batch_size if len(tokenized_train_dataset) % args.batch_size == 0 else int(len(tokenized_train_dataset)/args.batch_size) + 1
-    
+        
     tokenized_test_dataset = test_dataset.map(
                         tokenize_and_align_labels(tokenizer, [f'label_{task}' for task in TASKS]),
                         batched=True,
                         remove_columns=['text'],
                         desc="Running tokenizer on dataset",
                         )
+    
+    num_epoch_steps = len(tokenized_train_dataset)/args.batch_size if len(tokenized_train_dataset) % args.batch_size == 0 else int(len(tokenized_train_dataset)/args.batch_size) + 1
+
     
     data_collator = DataCollatorForMultiTaskTokenClassification(tokenizer)
    
