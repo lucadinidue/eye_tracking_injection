@@ -72,7 +72,7 @@ def scale_datasets(train_data: Dataset, test_data: Dataset) -> {Dataset, Dataset
 
 def tokenize_and_align_labels(tokenizer:AutoTokenizer, features:list):
     def _tokenize_and_align_labels(dataset, label_all_tokens=False):
-        tokenized_inputs = tokenizer(dataset['text'], max_length=128, padding=True, truncation=True, is_split_into_words=True)
+        tokenized_inputs = tokenizer(dataset['text'], max_length=256, padding=True, truncation=True, is_split_into_words=True)
         labels = dict()
         for feature_name in features:
             labels[feature_name] = list()

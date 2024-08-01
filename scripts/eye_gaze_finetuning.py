@@ -20,12 +20,15 @@ def main():
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
     parser.add_argument('-b', '--batch_size', type=int, default=32)
+    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=150)
     args = parser.parse_args()
 
-    set_seed(42)
+    set_seed(SEED)
 
+    model_string = args.model_name.split('/')[-1]
     train_path = f'data/geco/dataset/pp{args.user_id}_dataset_train.csv'
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
+    model_out_dir = f'models/eye_gaze_finetuning/{model_string}_pp{args.user_id}_{args.training_epochs}epochs'
 
     train_df = pd.read_csv(train_path, index_col=0)
     test_df = pd.read_csv(test_path, index_col=0)
@@ -45,6 +48,8 @@ def main():
                     desc="Running tokenizer on train dataset",
                     )
     
+    num_epoch_steps = len(tokenized_train_dataset)/args.batch_size if len(tokenized_train_dataset) % args.batch_size == 0 else int(len(tokenized_train_dataset)/args.batch_size) + 1
+    
     tokenized_test_dataset = test_dataset.map(
                         tokenize_and_align_labels(tokenizer, [f'label_{task}' for task in TASKS]),
                         batched=True,
@@ -54,14 +59,17 @@ def main():
     
     data_collator = DataCollatorForMultiTaskTokenClassification(tokenizer)
    
-    metric = evaluate.load('rmse')
+    mae = evaluate.load('mae')
+    spearmanr = evaluate.load("spearmanr")
     def compute_metrics(eval_pred):
         res = dict()
-
         for task_idx, task in enumerate(trainer.label_names):
             labels = eval_pred.label_ids[task_idx].flatten()
             predictions = eval_pred.predictions[task[len('label_'):]].flatten()
-            res[task] = metric.compute(predictions=predictions, references=labels)
+            res[task] = {
+                'mae': mae.compute(predictions=predictions, references=labels)['mae'],
+                'spearmanr': spearmanr.compute(predictions=predictions, references=labels)['spearmanr']
+            }
         return res
 
     
@@ -69,12 +77,17 @@ def main():
     config.update({'tasks': TASKS, 'keys_to_ignore_at_inference':['mse_loss', 'mae_loss', 'labels']})
     model = RobertaForMultiTaskTokenClassification.from_pretrained(args.model_name, config=config)
     
+
     training_args = TrainingArguments(
-        output_dir='models/prova', 
+        output_dir=model_out_dir, 
         eval_strategy='epoch',
+        logging_strategy='epoch',
+        logging_dir=model_out_dir,
         label_names=[f'label_{task}' for task in TASKS],
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8
+        per_device_train_batch_size=args.batch_size,
+        per_device_eval_batch_size=args.batch_size,
+        num_train_epochs=args.training_epochs,
+        save_steps=num_epoch_steps*10,
         )
     
 
@@ -88,6 +101,8 @@ def main():
     )
 
     trainer.train()
+    trainer.save_model(model_out_dir)
+    trainer.save_state()
 
 
 if __name__ == '__main__':
