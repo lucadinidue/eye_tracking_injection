@@ -20,7 +20,8 @@ def main():
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
     parser.add_argument('-b', '--batch_size', type=int, default=32)
-    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=150)
+    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=int, default=1e-5)
+    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=50)
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -28,7 +29,7 @@ def main():
     model_string = args.model_name.split('/')[-1]
     train_path = f'data/geco/dataset/pp{args.user_id}_dataset_train.csv'
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
-    model_out_dir = f'models/eye_gaze_finetuning/{model_string}_pp{args.user_id}_{args.training_epochs}epochs'
+    model_out_dir = f'models/eye_gaze_finetuning/{model_string}_pp{args.user_id}_{args.training_epochs}epochs_lr{args.learning_rate}'
 
     train_df = pd.read_csv(train_path, index_col=0)
     test_df = pd.read_csv(test_path, index_col=0)
@@ -66,7 +67,13 @@ def main():
         res = dict()
         for task_idx, task in enumerate(trainer.label_names):
             labels = eval_pred.label_ids[task_idx].flatten()
-            predictions = eval_pred.predictions[task[len('label_'):]].flatten()
+            predictions = eval_pred.predictions[task[len('label_'):]].squeeze().flatten()
+            
+            not_masked_labels = labels != -100
+            labels = labels[not_masked_labels]
+            predictions = predictions[not_masked_labels]
+
+
             res[task] = {
                 'mae': mae.compute(predictions=predictions, references=labels)['mae'],
                 'spearmanr': spearmanr.compute(predictions=predictions, references=labels)['spearmanr']
@@ -89,6 +96,7 @@ def main():
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=args.training_epochs,
         save_steps=num_epoch_steps*10,
+        learning_rate=args.learning_rate
         )
     
 
