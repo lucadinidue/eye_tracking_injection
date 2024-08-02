@@ -20,7 +20,7 @@ def main():
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
     parser.add_argument('-b', '--batch_size', type=int, default=32)
-    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=int, default=1e-5)
+    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=2e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=50)
     args = parser.parse_args()
 
