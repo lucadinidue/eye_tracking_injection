@@ -22,6 +22,7 @@ def main():
     parser.add_argument('-b', '--batch_size', type=int, default=32)
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=2e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=50)
+    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.0)
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -30,6 +31,9 @@ def main():
     train_path = f'data/geco/dataset/pp{args.user_id}_dataset_train.csv'
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
     model_out_dir = f'models/eye_gaze_finetuning/{model_string}_pp{args.user_id}_{args.training_epochs}epochs_lr{args.learning_rate}'
+
+    if args.weight_decay > 0:
+        model_out_dir += '_wd'
 
     train_df = pd.read_csv(train_path, index_col=0)
     test_df = pd.read_csv(test_path, index_col=0)
@@ -96,7 +100,8 @@ def main():
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=args.training_epochs,
         save_steps=num_epoch_steps*10,
-        learning_rate=args.learning_rate
+        learning_rate=args.learning_rate,
+        weight_decay=args.weight_decay
         )
     
 
