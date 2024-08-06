@@ -4,6 +4,7 @@ import sys
 sys.path.append(os.path.abspath(".")) 
 from modules.data.attention_utils import create_subwords_alignment, save_dictionary
 from modules.data.dataset_utils import create_senteces_from_data
+from modules.modeling.model_utils import get_tokenizer_name
 from transformers.tokenization_utils_base import BatchEncoding
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from tqdm import tqdm
@@ -17,12 +18,6 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
     
-
-def get_tokenizer_name(model_name):
-    if 'roberta' in model_name.lower():
-        return 'FacebookAI/roberta-base'
-    else:
-        raise Exception(f'Model {model_name} not supported yet.')
     
 def get_subword_prefix(tokenizer_name):
     if 'roberta' in tokenizer_name.lower():
