@@ -1,4 +1,4 @@
-from transformers import DataCollatorForTokenClassification
+from transformers import DataCollatorForTokenClassification, DataCollatorWithPadding
 
 class DataCollatorForMultiTaskTokenClassification(DataCollatorForTokenClassification):
 
@@ -56,4 +56,25 @@ class DataCollatorForMultiTaskTokenClassification(DataCollatorForTokenClassifica
         for label in labels_names:
             batch[label] = torch.tensor(batch_labels_dict[label_name], dtype=torch.float32)
 
+        return batch
+
+
+class DataCollatorForInterleavedMultiTask(DataCollatorForTokenClassification):
+    
+    def __init__(self, tokenizer, dst_label, eye_gaze_labels):
+        self.eye_gaze_data_collator = DataCollatorForMultiTaskTokenClassification(tokenizer)
+        self.dst_data_collator = DataCollatorWithPadding(tokenizer)
+        self.dst_label = dst_label
+        self.eye_gaze_labels = eye_gaze_labels
+
+    def __call__(self, features):
+        return self.torch_call(features)
+
+    def torch_call(self, features):
+        if features[0][self.dst_label] is None:
+            filtered_features = [{k: v for k, v in sentence.items() if k != self.dst_label} for sentence in features]
+            batch = self.eye_gaze_data_collator(filtered_features)
+        else: 
+            filtered_features = [{k: v for k, v in sentence.items() if k not in self.eye_gaze_labels} for sentence in features]
+            batch = self.dst_data_collator(filtered_features)
         return batch
