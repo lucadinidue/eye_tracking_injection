@@ -38,8 +38,8 @@ def load_complexity_dataset(src_path:str) -> Dataset:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_path', dest='model_path')
-    parser.add_argument('-b', '--batch_size', type=int, default=32)
-    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=5e-05)
+    parser.add_argument('-b', '--batch_size', type=int, default=16)
+    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-f', '--freeze_layers', type=str, default=None)
@@ -108,7 +108,8 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        warmup_steps=500,  
+        warmup_steps=500,
+        save_strategy='no' 
         )
     
 
