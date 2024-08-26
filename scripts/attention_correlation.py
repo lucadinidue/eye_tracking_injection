@@ -78,7 +78,7 @@ def compute_correlation_df_across_epochs(model_attention_dir, eye_tracking_data,
     return pd.DataFrame(correlations)
 
 
-def compute_baseline_correlation(user_attention_dir, eye_tracking_data, positive_corr=True):
+def compute_baseline_correlation(user_attention_dir, eye_tracking_data, epochs, positive_corr=True):
     """Compute baseline correlations across all epochs for a user."""
     correlations = {'epoch': [], 'layer': [], 'correlation': []}
 
@@ -87,7 +87,7 @@ def compute_baseline_correlation(user_attention_dir, eye_tracking_data, positive
         layer_attention = load_model_attention(layer_attention_path)
         corr = compute_correlation(eye_tracking_data, layer_attention, positive_corr)
 
-        for epoch in [10, 20, 30, 40 , 50]:
+        for epoch in epochs:
             correlations['epoch'].append(epoch)
             correlations['layer'].append(layer)
             correlations['correlation'].append(corr)
@@ -100,15 +100,21 @@ def plot_correlations(all_correlation_dfs, plots_dir, model_config):
     vmin, vmax = all_correlation_dfs['correlation'].min(), all_correlation_dfs['correlation'].max()
     epochs = sorted(all_correlation_dfs['epoch'].unique())
 
+    # fig, axes = plt.subplots(len(epochs), 1, sharex=True, figsize=(10, 10))
     fig, axes = plt.subplots(len(epochs), 1, sharex=True, figsize=(7, 30))
     
     for idx, epoch in enumerate(epochs):
         epoch_correlations_df = all_correlation_dfs[all_correlation_dfs['epoch'] == epoch]
         pivoted_df = epoch_correlations_df.pivot(index='user', columns='layer', values='correlation')
 
-        sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)
-        axes[idx].set_title(f'Epoch {epoch}')
-        axes[idx].set_yticklabels(axes[idx].get_yticklabels(), rotation=0)
+        if len(epochs) > 1:
+            sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)
+            axes[idx].set_title(f'Epoch {epoch}')
+            axes[idx].set_yticklabels(axes[idx].get_yticklabels(), rotation=0)
+        else:
+            sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes, vmin=vmin, vmax=vmax)
+            axes.set_title(f'Epoch {epoch}')
+            axes.set_yticklabels(axes.get_yticklabels(), rotation=0)
 
     plt.tight_layout()
     fig.savefig(os.path.join(plots_dir, f'roberta_base_{model_config}.png'))
@@ -118,7 +124,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--eye_tracking_feature', type=str, default='dur', help='Feature to use from eye-tracking data')
     parser.add_argument('-p', '--positive_correlation', type=bool, default=True, help='Consider only positive correlations')
-    parser.add_argument('-c', '--model_config', type=str, default='50epochs_lr5e-05', help='Model configuration')
+    parser.add_argument('-c', '--model_config', type=str, default='10epochs_lr5e-05', help='Model configuration')
     args = parser.parse_args()
 
     eye_tracking_dir = 'data/geco/dataset/'
@@ -130,7 +136,7 @@ def main():
     for file_name in os.listdir(eye_tracking_dir):
         if 'test' in file_name:
             user_id = re.findall(r'pp(\d*)_', file_name)[0]
-            user_attention_dir = os.path.join(model_attention_dir, f'roberta-base_pp{user_id}_{args.model_config}')
+            user_attention_dir = os.path.join(model_attention_dir, args.model_config, f'roberta-base_pp{user_id}')
             eye_tracking_path = os.path.join(eye_tracking_dir, file_name)
             eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
 
@@ -139,11 +145,12 @@ def main():
             all_correlation_dfs.append(correlations_df)
 
     # Add baseline correlation
+    epochs = list(range(10, int(args.model_config[:2])+10, 10))
     baseline_attention_dir = os.path.join(model_attention_dir, 'roberta-base')
     baseline_eye_tracking_path = os.path.join(eye_tracking_dir, 'pp21_dataset_test.csv')
     baseline_eye_tracking_data = load_eye_tracking_data(baseline_eye_tracking_path, args.eye_tracking_feature)
 
-    baseline_correlation_df = compute_baseline_correlation(baseline_attention_dir, baseline_eye_tracking_data, args.positive_correlation)
+    baseline_correlation_df = compute_baseline_correlation(baseline_attention_dir, baseline_eye_tracking_data, epochs, args.positive_correlation)
     baseline_correlation_df['user'] = 'no'
     all_correlation_dfs.append(baseline_correlation_df)
 

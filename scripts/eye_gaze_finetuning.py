@@ -20,7 +20,7 @@ def main():
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
     parser.add_argument('-b', '--batch_size', type=int, default=32)
-    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=2e-05)
+    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=50)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.0)
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
@@ -33,8 +33,7 @@ def main():
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
 
     loss_dir = 'weighted_loss' if args.weighted_loss else 'average_loss'
-    print(loss_dir)
-    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{model_string}_pp{args.user_id}_{args.training_epochs}epochs_lr{args.learning_rate}'
+    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{args.training_epochs}epochs_lr{args.learning_rate}_orig/{model_string}_pp{args.user_id}'
 
     # if args.weight_decay > 0:
     #     model_out_dir += '_wd'
@@ -110,7 +109,8 @@ def main():
         num_train_epochs=args.training_epochs,
         save_steps=num_epoch_steps*10,
         learning_rate=args.learning_rate,
-        weight_decay=args.weight_decay
+        weight_decay=args.weight_decay,
+        save_strategy = 'steps' if args.training_epochs > 10 else 'no'
         )
     
 
