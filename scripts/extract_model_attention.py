@@ -70,8 +70,10 @@ def main():
     parser.add_argument('-o', '--output_directory', dest='output_directory', type=str)
     args = parser.parse_args()
 
-    
-    user_id = re.findall(r'pp(\d*)', args.model_path)[0]
+    try:
+        user_id = re.findall(r'pp(\d*)', args.model_path)[0]
+    except: # the not finetuned model has no user
+        user_id = 21
     test_path = f'data/geco/dataset/pp{user_id}_dataset_test.csv'
 
     test_df = pd.read_csv(test_path, index_col=0)
