@@ -1,4 +1,3 @@
-
 import os
 import sys
 sys.path.append(os.path.abspath(".")) 
@@ -58,112 +57,111 @@ def compute_correlation(eye_tracking_dataset, model_attention_dict, positive_cor
     return None
 
 
-def compute_correlation_df_across_epochs(model_attention_dir, eye_tracking_data, positive_corr=True):
-    """Compute correlations across epochs for each layer."""
-    correlations = {'epoch': [], 'layer': [], 'correlation': []}
-
-    for checkpoint_dir in os.listdir(model_attention_dir):
-        checkpoint_path = os.path.join(model_attention_dir, checkpoint_dir)
-        epoch = int(checkpoint_dir.split('-')[-1]) * 10
-
-        for layer in range(12):
-            layer_attention_path = os.path.join(checkpoint_path, f'{layer}.json')
-            layer_attention = load_model_attention(layer_attention_path)
-            corr = compute_correlation(eye_tracking_data, layer_attention, positive_corr)
-
-            correlations['epoch'].append(epoch)
-            correlations['layer'].append(layer)
-            correlations['correlation'].append(corr)
-
-    return pd.DataFrame(correlations)
-
-
-def compute_baseline_correlation(user_attention_dir, eye_tracking_data, epochs, positive_corr=True):
-    """Compute baseline correlations across all epochs for a user."""
-    correlations = {'epoch': [], 'layer': [], 'correlation': []}
-
-    for layer in range(12):
-        layer_attention_path = os.path.join(user_attention_dir, f'{layer}.json')
-        layer_attention = load_model_attention(layer_attention_path)
-        corr = compute_correlation(eye_tracking_data, layer_attention, positive_corr)
-
-        for epoch in epochs:
-            correlations['epoch'].append(epoch)
-            correlations['layer'].append(layer)
-            correlations['correlation'].append(corr)
-
-    return pd.DataFrame(correlations)
-
-
-def plot_correlations(all_correlation_dfs, plots_dir, model_config):
-    """Plot correlation heatmaps across epochs and save the plot."""
-    vmin, vmax = all_correlation_dfs['correlation'].min(), all_correlation_dfs['correlation'].max()
-    epochs = sorted(all_correlation_dfs['epoch'].unique())
-
-    # fig, axes = plt.subplots(len(epochs), 1, sharex=True, figsize=(10, 10))
-    fig, axes = plt.subplots(len(epochs), 1, sharex=True, figsize=(7, 30))
+def plot_correlations(correlation_df, plots_dir, model_config, grouping_variable='epoch'):
+    """Plot correlation heatmaps across epochs or other grouping variables and save the plot."""
+    vmin, vmax = correlation_df['correlation'].min(), correlation_df['correlation'].max()
+    var_values = sorted(correlation_df[grouping_variable].unique())
+    y_size = len(var_values) * 6
+    fig, axes = plt.subplots(len(var_values), 1, sharex=True, figsize=(10, y_size))
     
-    for idx, epoch in enumerate(epochs):
-        epoch_correlations_df = all_correlation_dfs[all_correlation_dfs['epoch'] == epoch]
-        pivoted_df = epoch_correlations_df.pivot(index='user', columns='layer', values='correlation')
+    if len(var_values) == 1:
+        axes = [axes]  # Ensure axes is always a list for consistency
 
-        if len(epochs) > 1:
-            sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)
-            axes[idx].set_title(f'Epoch {epoch}')
-            axes[idx].set_yticklabels(axes[idx].get_yticklabels(), rotation=0)
-        else:
-            sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes, vmin=vmin, vmax=vmax)
-            axes.set_title(f'Epoch {epoch}')
-            axes.set_yticklabels(axes.get_yticklabels(), rotation=0)
+    for idx, value in enumerate(var_values):
+        pivoted_df = correlation_df[correlation_df[grouping_variable] == value].pivot(index='user', columns='layer', values='correlation')
+        sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)
+        axes[idx].set_title(f'{grouping_variable} {value}')
+        axes[idx].set_yticklabels(axes[idx].get_yticklabels(), rotation=0)
 
     plt.tight_layout()
     fig.savefig(os.path.join(plots_dir, f'roberta_base_{model_config}.png'))
 
 
+def compute_average_user_correlation(all_correlation_dfs, grouping_variable='epoch'):
+    mean_correlation_row = all_correlation_dfs[all_correlation_dfs['user'] != 'no'].groupby([grouping_variable, 'layer'])['correlation'].mean().reset_index()
+    mean_correlation_row['user'] = 'ft_avg'
+    return mean_correlation_row
+
+def extract_layers_correlations(model_dir, eye_tracking_data, positive_correlation, all_correlations_dict, grouping_value, user_id, grouping_variable='epoch'):
+    for layer in range(12):
+        layer_attention_path = os.path.join(model_dir, f'{layer}.json')
+        layer_attention = load_model_attention(layer_attention_path)
+        corr = compute_correlation(eye_tracking_data, layer_attention, positive_correlation)
+        all_correlations_dict['layer'].append(layer)
+        all_correlations_dict['correlation'].append(corr)
+        all_correlations_dict[grouping_variable].append(grouping_value)
+        all_correlations_dict['user'].append(user_id)
+
+
+def attention_correlation_base(eye_tracking_dir, src_attention_dir, grouping_variable, args):
+    model_attention_dir = os.path.join(src_attention_dir, 'base', args.model_config)
+
+    all_correlation_dict = {'layer': [], 'correlation': [], 'user': [], 'epoch':[]}
+    for model_dir_name in os.listdir(model_attention_dir):
+        user_id = re.findall(r'pp(\d*)$', model_dir_name)[0]
+        eye_tracking_path = os.path.join(eye_tracking_dir, f'pp{user_id}_dataset_test.csv')
+        eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
+        for checkpoint_dir_name in os.listdir(os.path.join(model_attention_dir, model_dir_name)):
+            checkpoint_dir = os.path.join(model_attention_dir, model_dir_name, checkpoint_dir_name) 
+            epoch = int(checkpoint_dir.split('-')[-1]) * 10           
+            extract_layers_correlations(checkpoint_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, epoch, user_id, grouping_variable)
+
+    baseline_attention_dir = os.path.join(src_attention_dir, 'base', 'roberta-base')
+    for epoch in list(set(all_correlation_dict['epoch'])):
+        extract_layers_correlations(baseline_attention_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, epoch, 'no_ft', grouping_variable)
+    all_correlations_df = pd.DataFrame.from_dict(all_correlation_dict)
+    
+    return all_correlations_df
+
+
+
+def attention_correlation_downstream_tasks(eye_tracking_dir, src_attention_dir, grouping_variable, args):
+    model_attention_dir = os.path.join(src_attention_dir, args.downstream_task, args.model_config)
+
+    all_correlation_dict = {'layer': [], 'correlation': [], 'user': [], 'trainable': []}
+    for trainable_config in os.listdir(model_attention_dir):
+        trainable_dir = os.path.join(model_attention_dir, trainable_config)
+        for model_dir_name in os.listdir(trainable_dir):
+            model_dir = os.path.join(trainable_dir, model_dir_name)
+            user_id = re.findall(r'pp(\d*)$', model_dir_name)[0]
+            eye_tracking_path = os.path.join(eye_tracking_dir, f'pp{user_id}_dataset_test.csv')
+            eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
+            extract_layers_correlations(model_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, trainable_config, user_id, grouping_variable)
+
+    baseline_attention_dir = os.path.join(src_attention_dir, args.downstream_task, 'roberta-base')
+    for trainable_config in list(set(all_correlation_dict['trainable'])):
+        extract_layers_correlations(baseline_attention_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, trainable_config, 'no_ft', grouping_variable)
+    all_correlations_df = pd.DataFrame.from_dict(all_correlation_dict)
+
+    return all_correlations_df
+
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--eye_tracking_feature', type=str, default='dur', help='Feature to use from eye-tracking data')
-    parser.add_argument('-p', '--positive_correlation', type=bool, default=True, help='Consider only positive correlations')
-    parser.add_argument('-c', '--model_config', type=str, default='10epochs_lr5e-05', help='Model configuration')
+    parser.add_argument('-f', '--eye_tracking_feature', type=str, default='dur', help='Eye-tracking feature used to compute correlation.')
+    parser.add_argument('-p', '--positive_correlation', type=bool, default=True, help='Computes the absolute value of correlation coefficients.')
+    parser.add_argument('-c', '--model_config', type=str, default='50epochs_lr1e-05', help='Model configuration.')
+    parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['base', 'complexity', 'sentiment'], help='Indicates the downstream task on which the model has been finetuned.')
     args = parser.parse_args()
 
     eye_tracking_dir = 'data/geco/dataset/'
     model_attention_dir = 'attentions/'
-    plots_dir = 'results/attention_correlations'
+    plots_dir = f'results/attention_correlations/{args.downstream_task}'
 
-    all_correlation_dfs = []
-
-    for file_name in os.listdir(eye_tracking_dir):
-        if 'test' in file_name:
-            user_id = re.findall(r'pp(\d*)_', file_name)[0]
-            user_attention_dir = os.path.join(model_attention_dir, args.model_config, f'roberta-base_pp{user_id}')
-            eye_tracking_path = os.path.join(eye_tracking_dir, file_name)
-            eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
-
-            correlations_df = compute_correlation_df_across_epochs(user_attention_dir, eye_tracking_data, args.positive_correlation)
-            correlations_df['user'] = user_id
-            all_correlation_dfs.append(correlations_df)
-
-    # Add baseline correlation
-    epochs = list(range(10, int(args.model_config[:2])+10, 10))
-    baseline_attention_dir = os.path.join(model_attention_dir, 'roberta-base')
-    baseline_eye_tracking_path = os.path.join(eye_tracking_dir, 'pp21_dataset_test.csv')
-    baseline_eye_tracking_data = load_eye_tracking_data(baseline_eye_tracking_path, args.eye_tracking_feature)
-
-    baseline_correlation_df = compute_baseline_correlation(baseline_attention_dir, baseline_eye_tracking_data, epochs, args.positive_correlation)
-    baseline_correlation_df['user'] = 'no'
-    all_correlation_dfs.append(baseline_correlation_df)
-
-    # Combine all correlation dataframes
-    all_correlation_dfs = pd.concat(all_correlation_dfs, axis=0)
-
+    if args.downstream_task == 'base':
+        grouping_variable = 'epoch'
+        all_correlations_df = attention_correlation_base(eye_tracking_dir, model_attention_dir, grouping_variable, args)
+    else:
+        grouping_variable = 'trainable'
+        all_correlations_df = attention_correlation_downstream_tasks(eye_tracking_dir, model_attention_dir, grouping_variable, args)
+    
     # Add average user correlation
-    mean_correlation = all_correlation_dfs[all_correlation_dfs['user'] != 'no'].groupby(['epoch', 'layer'])['correlation'].mean().reset_index()
-    mean_correlation['user'] = 'ft_avg'
-    all_correlation_dfs = pd.concat([all_correlation_dfs, mean_correlation], ignore_index=True)
+    mean_correlation_row = compute_average_user_correlation(all_correlations_df, grouping_variable)
+    all_correlations_df = pd.concat([all_correlations_df, mean_correlation_row], ignore_index=True)
 
-    # Plot the results
-    plot_correlations(all_correlation_dfs, plots_dir, args.model_config)
+
+    plot_correlations(all_correlations_df, plots_dir, args.model_config, grouping_variable)
 
 
 if __name__ == '__main__':

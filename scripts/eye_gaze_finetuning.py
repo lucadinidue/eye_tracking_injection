@@ -33,7 +33,7 @@ def main():
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
 
     loss_dir = 'weighted_loss' if args.weighted_loss else 'average_loss'
-    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{args.training_epochs}epochs_lr{args.learning_rate}_orig/{model_string}_pp{args.user_id}'
+    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{args.training_epochs}epochs_lr{args.learning_rate}_bs8/{model_string}_pp{args.user_id}'
 
     # if args.weight_decay > 0:
     #     model_out_dir += '_wd'
