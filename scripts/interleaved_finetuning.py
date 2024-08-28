@@ -3,8 +3,9 @@ import os
 sys.path.append(os.path.abspath('.'))
 
 from modules.data.dataset_utils import create_senteces_from_data, scale_datasets, tokenize_and_align_labels
-from modules.modeling.custom_modeling_roberta import RobertaForMultiTaskTokenClassification, RobertaForInterleavedMultitask
-from transformers import AutoTokenizer, TrainingArguments, Trainer, set_seed, AutoConfig
+from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMultitask
+from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig
+from modules.modeling.custom_trainer import InterleavedMultitaskFinetuningTrainer
 from modules.modeling.custom_data_collator import DataCollatorForInterleavedMultiTask
 from datasets import Dataset
 from itertools import cycle
@@ -12,7 +13,6 @@ import pandas as pd
 import argparse
 import evaluate
 
-from torch.utils.data import DataLoader, SequentialSampler
 
 SEED = 42
 TASKS = ['firstfix_dur','dur','firstrun_nfix','nfix','firstrun_dur']
@@ -107,32 +107,15 @@ def join_datasets(eye_gaze_dataset, dst_dataset, batch_size):
 
 
 
-class NoShuffleTrainer(Trainer):
-    def get_train_dataloader(self):
-        """
-        Returns the training DataLoader, with the shuffling turned off.
-        """
-        if self.train_dataset is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
-        
-        return DataLoader(
-            self.train_dataset,
-            batch_size=self.args.train_batch_size,
-            sampler=SequentialSampler(self.train_dataset),  # Use SequentialSampler instead of RandomSampler
-            collate_fn=self.data_collator,
-            drop_last=self.args.dataloader_drop_last,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
-        )
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
-    parser.add_argument('-b', '--batch_size', type=int, default=32)
-    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=2e-05)
-    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=50)
-    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.0)
+    parser.add_argument('-b', '--batch_size', type=int, default=16)
+    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=5e-05)
+    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=2)
+    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity'])
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
     args = parser.parse_args()
@@ -151,22 +134,23 @@ def main():
     if args.downstream_task == 'complexity':
         dst_train, dst_test = load_dst_dataset_complexity(tokenizer)
         downstream_type = 'regression'
+        num_labels = 1
     else:
-        assert False
+        raise Exception(f'Downstream task {args.downstream_task} not implemented yet!')
         dst_train, dst_test = None, None
         downstream_type = None
 
     train_dataset = join_datasets(eye_gaze_train, dst_train, args.batch_size)
-    test_dataset = join_datasets(eye_gaze_test, dst_test, args.batch_size)
+    test_dataset = {'eye_gaze': eye_gaze_test, 'dst': dst_test}
 
     data_collator = DataCollatorForInterleavedMultiTask(tokenizer, 'label_complexity', [f'label_{task}' for task in TASKS])
     
    
     mae = evaluate.load('mae')
     spearmanr = evaluate.load("spearmanr")
-    def compute_metrics(eval_pred):
+    def compute_metrics_eye_gaze(eval_pred):
         res = dict()
-        for task_idx, task in enumerate(trainer.label_names):
+        for task_idx, task in enumerate([f'label_{task}' for task in TASKS]):
             labels = eval_pred.label_ids[task_idx].flatten()
             predictions = eval_pred.predictions[task[len('label_'):]].squeeze().flatten()
             
@@ -174,17 +158,28 @@ def main():
             labels = labels[not_masked_labels]
             predictions = predictions[not_masked_labels]
 
-
             res[task] = {
                 'mae': mae.compute(predictions=predictions, references=labels)['mae'],
                 'spearmanr': spearmanr.compute(predictions=predictions, references=labels)['spearmanr']
             }
         return res
 
+    def compute_metrics_complexity(eval_pred):
+        logits, labels = eval_pred
+        labels = labels.reshape(-1, 1)
+        res = {
+                'mae': mae.compute(predictions=logits, references=labels)['mae'],
+                'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
+            }           
+        return res
+    
+    if args.downsteam_task == 'complexity':
+        compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_complexity}
+
     
     config = AutoConfig.from_pretrained(args.model_name)
     config.update({'token_tasks': TASKS,  'donwstream_task': args.downstream_task, 'downstream_type': downstream_type, 'keys_to_ignore_at_inference':['mse_loss', 'mae_loss', 'labels']})
-
+    config.num_labels = num_labels
 
     model = RobertaForInterleavedMultitask.from_pretrained(args.model_name, config=config)
     
@@ -200,11 +195,11 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy='no'
+        save_strategy='no',
         )
     
 
-    trainer = NoShuffleTrainer(
+    trainer = InterleavedMultitaskFinetuningTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,

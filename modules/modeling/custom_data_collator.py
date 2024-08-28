@@ -71,7 +71,7 @@ class DataCollatorForInterleavedMultiTask(DataCollatorForTokenClassification):
         return self.torch_call(features)
 
     def torch_call(self, features):
-        if features[0][self.dst_label] is None:
+        if (self.dst_label not in features[0]) or (features[0][self.dst_label] is None): 
             filtered_features = [{k: v for k, v in sentence.items() if k != self.dst_label} for sentence in features]
             batch = self.eye_gaze_data_collator(filtered_features)
         else: 
