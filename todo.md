@@ -2,16 +2,23 @@
 
 1) Simple finetuning
   - [x] Code
-  - [ ] Eye-gaze perfomances
-  - [ ] Attention correlation
-  - [ ] DST performances
+  - [x] Eye-gaze perfomances
+  - [x] Attention correlation
+  - [ ] Sentiment:
+    - [ ] Performances
+    - [ ] Attention correlation
+  - [x] Complexity:
+    - [x] Performances
+    - [x] Attention correlation
 
-
-2) Partial finetuning
+2) Partial DST finetuning
   - [x] Code
-  - [ ] Eye-gaze perfomances
-  - [ ] Attention correlation
-  - [ ] DST performances
+  - [ ] Sentiment:
+    - [ ] Performances
+    - [ ] Attention correlation
+  - [x] Complexity:
+    - [x] Performances
+    - [x] Attention correlation
 
 
 3) Multi-task finetuning 
@@ -20,11 +27,21 @@
      - [ ] Weighted loss
   - [ ] Eye-gaze perfomances
   - [ ] Attention correlation
-  - [ ] DST performances
+  - [ ] Sentiment:
+    - [ ] Performances
+    - [ ] Attention correlation
+  - [ ] Complexity:
+    - [ ] Performances
+    - [ ] Attention correlation
 
 
 4) LoRa adapters
   - [ ] Code
   - [ ] Eye-gaze perfomances
   - [ ] Attention correlation
-  - [ ] DST performances
+    - [ ] Sentiment:
+    - [ ] Performances
+    - [ ] Attention correlation
+  - [ ] Complexity:
+    - [ ] Performances
+    - [ ] Attention correlation
