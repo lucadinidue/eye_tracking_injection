@@ -17,12 +17,11 @@ def parse_log_history_eval_metrics(log_history):
     """Parse evaluation metrics from the log history."""
     logs_dict = {'epoch': [], 'metric': [], 'score': []}
     for entry in log_history:
-        if 'eval_loss' in entry or 'eval_dst_loss' in entry:
-            prefix = 'eval_' if 'eval_loss' in entry else 'eval_dst_'
+        if 'eval_loss' in entry:
             for metric in ['mae', 'spearmanr']:
                 logs_dict['epoch'].append(entry['epoch'])
                 logs_dict['metric'].append(metric)
-                logs_dict['score'].append(entry[f'{prefix}{metric}'])
+                logs_dict['score'].append(entry[f'eval_{metric}'])
     return pd.DataFrame.from_dict(logs_dict)
 
 def load_and_parse_trainer_state(model_dir):
@@ -34,6 +33,10 @@ def load_and_parse_trainer_state(model_dir):
         user_id = 'no_ft'
     metrics_df = parse_log_history_eval_metrics(trainer_state['log_history'])
     metrics_df['user'] = user_id
+    freeze = '_'.join(model_dir.split('/')[-1].split('_')[-2:])
+    metrics_df['freeze'] = freeze if 'pp' not in freeze else 'full'
+    if user_id == 'no_ft':
+        metrics_df['freeze'] = 'no_finetuning'
     return metrics_df
     
 def create_output_directory(directory):
@@ -42,22 +45,24 @@ def create_output_directory(directory):
 
 def plot_metrics(metrics_dfs, plots_out_dir):
     """Generate and save line plots and heatmaps for the metrics."""
+    hue_order = ['full', 'last_3', 'last_2', 'regressor_only', 'no_finetuning']
+
     # MAE across epochs
-    plot_lineplot(metrics_dfs, 'mae', os.path.join(plots_out_dir, 'mae_across_epochs.png'))
+    plot_lineplot(metrics_dfs, 'mae', hue_order, os.path.join(plots_out_dir, 'mae_across_epochs.png'))
 
     # Spearman correlation across epochs
-    plot_lineplot(metrics_dfs, 'spearmanr', os.path.join(plots_out_dir, 'spearman_across_epochs.png'))
+    plot_lineplot(metrics_dfs, 'spearmanr', hue_order, os.path.join(plots_out_dir, 'spearman_across_epochs.png'))
 
     # Heatmaps for the last epoch
-    # last_epoch_df = metrics_dfs[metrics_dfs['epoch'] == 10]
-    plot_heatmap(metrics_dfs, 'mae', os.path.join(plots_out_dir, 'mae.png'))
-    plot_heatmap(metrics_dfs, 'spearmanr', os.path.join(plots_out_dir, 'spearman.png'))
+    last_epoch_df = metrics_dfs[metrics_dfs['epoch'] == 10]
+    plot_heatmap(last_epoch_df, 'mae', os.path.join(plots_out_dir, 'mae.png'))
+    plot_heatmap(last_epoch_df, 'spearmanr', os.path.join(plots_out_dir, 'spearman.png'))
 
-def plot_lineplot(metrics_dfs, metric, output_path):
+def plot_lineplot(metrics_dfs, metric, hue_order, output_path):
     """Plot and save line plot for a specific metric."""
     p = sns.lineplot(
         data=metrics_dfs[metrics_dfs['metric'] == metric],
-        x='epoch', y='score', hue='user'
+        x='epoch', y='score', hue='freeze', hue_order=hue_order
     )
     p.set_title(metric.upper())
     p.figure.tight_layout()
@@ -66,7 +71,7 @@ def plot_lineplot(metrics_dfs, metric, output_path):
 
 def plot_heatmap(df, metric, output_path):
     """Plot and save heatmap for a specific metric."""
-    pivoted_df = df[df['metric'] == metric].pivot(index='user', columns='epoch', values='score')
+    pivoted_df = df[df['metric'] == metric].pivot(index='freeze', columns='user', values='score')
     p = sns.heatmap(data=pivoted_df, annot=True, cmap='crest' if metric == 'spearmanr' else 'crest_r', cbar=False)
     p.set_title(metric.upper())
     p.figure.tight_layout()
@@ -87,6 +92,7 @@ def main():
 
     metrics_dfs = []
     for model_dir in model_dirs:
+        print(model_dir)
         metrics_df = load_and_parse_trainer_state(model_dir)
         if not metrics_df.empty:
             metrics_dfs.append(metrics_df)

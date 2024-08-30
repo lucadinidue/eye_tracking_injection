@@ -13,29 +13,41 @@ def parse_log_history_loss(log_history):
             logs_dict['epoch'].append(el['epoch'])
             logs_dict['data'].append('train')
             logs_dict['loss'].append(el['loss'])
-        else:
-            if 'eval_loss' in el:
+        elif 'eval_loss' in el:
                 logs_dict['epoch'].append(el['epoch'])
                 logs_dict['data'].append('eval')
                 logs_dict['loss'].append(el['eval_loss'])
+        elif 'eval_eye_gaze_loss' in el:
+            logs_dict['epoch'].append(el['epoch'])
+            logs_dict['data'].append('eval_eye_gaze_loss')
+            logs_dict['loss'].append(el['eval_eye_gaze_loss'])
+        elif 'eval_dst_loss' in el:
+            logs_dict['epoch'].append(el['epoch'])
+            logs_dict['data'].append('eval_dst_loss')
+            logs_dict['loss'].append(el['eval_dst_loss'])
     return pd.DataFrame.from_dict(logs_dict)
+
 
 
 def parse_log_history_eval_metrics(log_history):
     logs_dict = {'epoch': [], 'metric':[], 'score':[], 'label':[]}
     for el in log_history:
-        if 'eval_loss' in el:
+        if 'eval_eye_gaze_loss' in el or 'eval_dst_loss' in el:
+            prefix = 'eval_label'
+            if 'eval_eye_gaze_loss' in el:
+                prefix = 'eval_eye_gaze_label_'
+            elif 'eval_dst_loss' in el:
+                prefix = 'eval_dst_label_'
             epoch = el['epoch']
             for k, v in el.items():
-                if k.startswith('eval_label_'):
-                    label = k[len('eval_label_'):]
+                if k.startswith(prefix):
+                    label = k[len(prefix):]
                     for metric, score in v.items():
                         logs_dict['epoch'].append(epoch)
                         logs_dict['label'].append(label)
                         logs_dict['metric'].append(metric)
                         logs_dict['score'].append(score)
     return pd.DataFrame.from_dict(logs_dict)
-
 
 
 def load_log_history_df(models_src_dir, loading_function):
@@ -60,7 +72,7 @@ def save_lineplot(data, x, y, hue, title, out_path):
 
 
 def save_heatmap(last_epoch_df, metric, out_path):
-    pivoted_df = last_epoch_df.pivot(index='user', columns='label', values='score')
+    pivoted_df = last_epoch_df.pivot(index='user', columns='label', values='score')   
     cmap = 'crest' if metric == 'spearmanr' else 'crest_r'
     p = sns.heatmap(data=pivoted_df, annot=True, cmap=cmap, cbar=False)
     p.set_title(metric.upper())
@@ -70,25 +82,26 @@ def save_heatmap(last_epoch_df, metric, out_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--model_config', type=str, default='50epochs_lr1e-05', help='Model configuration')
+    parser.add_argument('-i', '--models_input_directory', type=str, help='Models input directory.')
+    parser.add_argument('-o', '--output_directory', type=str, help='Output directory.')
     args = parser.parse_args()
 
-    models_src_dir = f'models/eye_gaze_finetuning/average_loss/{args.model_config}'
-    out_plot_dir = 'results/eye_tracking'
+    out_plot_dir = f'results/eye_tracking/{args.output_directory}'
     
     if not os.path.exists(out_plot_dir):
         os.makedirs(out_plot_dir)
 
-    loss_df = load_log_history_df(models_src_dir, parse_log_history_loss)
-    eval_df = load_log_history_df(models_src_dir, parse_log_history_eval_metrics)
+    loss_df = load_log_history_df(args.models_input_directory, parse_log_history_loss)
+    eval_df = load_log_history_df(args.models_input_directory, parse_log_history_eval_metrics)
     
     save_lineplot(loss_df, 'epoch', 'loss', 'data', 'Training losses', os.path.join(out_plot_dir, 'training_losses.png'))
     
     for metric in ['mae', 'spearmanr']:
+        last_epoch = int(eval_df['epoch'].max())
         save_lineplot(eval_df[eval_df['metric'] == metric], 'epoch', 'score', 'label', metric.upper(), 
                       os.path.join(out_plot_dir, f'{metric}_epochs.png'))
-        last_epoch_df = eval_df[(eval_df['epoch'] == 50) & (eval_df['metric'] == metric)]
-        save_heatmap(last_epoch_df, metric, os.path.join(out_plot_dir, f'{metric}_epoch50.png')) 
+        last_epoch_df = eval_df[(eval_df['epoch'] == last_epoch) & (eval_df['metric'] == metric)]
+        save_heatmap(last_epoch_df, metric, os.path.join(out_plot_dir, f'{metric}_epoch{last_epoch}.png')) 
 
 if __name__ == '__main__':
     main()

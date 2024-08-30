@@ -35,7 +35,7 @@ def aggregate_tokens_attention(sentence_attention:list, alignment_ids:list):
     aggregated_weights = [el[0] for el in aggregated_weights]
     return aggregated_weights
 
-def extract_sentence_attention(model: AutoModelForMaskedLM, tokenized_text:BatchEncoding, alignment_ids:list, sentence_aggregation_method:str='avg') -> list:
+def extract_sentence_attention(model: AutoModelForMaskedLM, tokenized_text:BatchEncoding, alignment_ids:list, sentence_aggregation_method:str='cls') -> list:
     model_output = model(**tokenized_text)
     attention_matrices = model_output['attentions']
     layers_attentions = []

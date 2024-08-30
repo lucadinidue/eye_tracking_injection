@@ -57,7 +57,7 @@ def compute_correlation(eye_tracking_dataset, model_attention_dict, positive_cor
     return None
 
 
-def plot_correlations(correlation_df, plots_dir, model_config, grouping_variable='epoch'):
+def plot_correlations(correlation_df, plots_dir, out_dir, grouping_variable='epoch'):
     """Plot correlation heatmaps across epochs or other grouping variables and save the plot."""
     vmin, vmax = correlation_df['correlation'].min(), correlation_df['correlation'].max()
     var_values = sorted(correlation_df[grouping_variable].unique())
@@ -74,7 +74,7 @@ def plot_correlations(correlation_df, plots_dir, model_config, grouping_variable
         axes[idx].set_yticklabels(axes[idx].get_yticklabels(), rotation=0)
 
     plt.tight_layout()
-    fig.savefig(os.path.join(plots_dir, f'roberta_base_{model_config}.png'))
+    fig.savefig(os.path.join(plots_dir, f'roberta_base_{out_dir}.png'))
 
 
 def compute_average_user_correlation(all_correlation_dfs, grouping_variable='epoch'):
@@ -94,7 +94,7 @@ def extract_layers_correlations(model_dir, eye_tracking_data, positive_correlati
 
 
 def attention_correlation_base(eye_tracking_dir, src_attention_dir, grouping_variable, args):
-    model_attention_dir = os.path.join(src_attention_dir, 'base', args.model_config)
+    model_attention_dir = args.model_input_directory
 
     all_correlation_dict = {'layer': [], 'correlation': [], 'user': [], 'epoch':[]}
     for model_dir_name in os.listdir(model_attention_dir):
@@ -116,7 +116,7 @@ def attention_correlation_base(eye_tracking_dir, src_attention_dir, grouping_var
 
 
 def attention_correlation_downstream_tasks(eye_tracking_dir, src_attention_dir, grouping_variable, args):
-    model_attention_dir = os.path.join(src_attention_dir, args.downstream_task, args.model_config)
+    model_attention_dir = args.model_input_directory
 
     all_correlation_dict = {'layer': [], 'correlation': [], 'user': [], 'trainable': []}
     for trainable_config in os.listdir(model_attention_dir):
@@ -141,15 +141,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--eye_tracking_feature', type=str, default='dur', help='Eye-tracking feature used to compute correlation.')
     parser.add_argument('-p', '--positive_correlation', type=bool, default=True, help='Computes the absolute value of correlation coefficients.')
-    parser.add_argument('-c', '--model_config', type=str, default='50epochs_lr1e-05', help='Model configuration.')
-    parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['base', 'complexity', 'sentiment'], help='Indicates the downstream task on which the model has been finetuned.')
+    parser.add_argument('-i', '--model_input_directory', type=str, help='Model configuration.')
+    parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['base', 'complexity', 'sentiment', 'interleaved_complexity'], help='Indicates the downstream task on which the model has been finetuned.')
     args = parser.parse_args()
 
     eye_tracking_dir = 'data/geco/dataset/'
-    model_attention_dir = 'attentions/'
+    model_attention_dir = args.model_input_directory
     plots_dir = f'results/attention_correlations/{args.downstream_task}'
 
-    if args.downstream_task == 'base':
+    if args.downstream_task == 'base' or 'interleaved' in args.downstream_task:
         grouping_variable = 'epoch'
         all_correlations_df = attention_correlation_base(eye_tracking_dir, model_attention_dir, grouping_variable, args)
     else:
@@ -161,7 +161,7 @@ def main():
     all_correlations_df = pd.concat([all_correlations_df, mean_correlation_row], ignore_index=True)
 
 
-    plot_correlations(all_correlations_df, plots_dir, args.model_config, grouping_variable)
+    plot_correlations(all_correlations_df, plots_dir, args.downstream_task, grouping_variable)
 
 
 if __name__ == '__main__':

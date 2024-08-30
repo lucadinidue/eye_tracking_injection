@@ -36,12 +36,12 @@
 
 
 4) LoRa adapters
-  - [ ] Code
+  - [x] Code
   - [ ] Eye-gaze perfomances
   - [ ] Attention correlation
     - [ ] Sentiment:
     - [ ] Performances
     - [ ] Attention correlation
   - [ ] Complexity:
-    - [ ] Performances
+    - [x] Performances -> troppo drop per continuare
     - [ ] Attention correlation

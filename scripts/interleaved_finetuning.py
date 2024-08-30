@@ -113,8 +113,8 @@ def main():
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
     parser.add_argument('-b', '--batch_size', type=int, default=16)
-    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=5e-05)
-    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=2)
+    parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
+    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity'])
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
@@ -173,7 +173,7 @@ def main():
             }           
         return res
     
-    if args.downsteam_task == 'complexity':
+    if args.downstream_task == 'complexity':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_complexity}
 
     
@@ -195,7 +195,7 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy='no',
+        save_strategy='epoch',
         )
     
 
