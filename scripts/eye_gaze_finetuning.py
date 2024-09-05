@@ -19,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
-    parser.add_argument('-b', '--batch_size', type=int, default=32)
+    parser.add_argument('-b', '--batch_size', type=int, default=16)
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=50)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.0)
@@ -33,7 +33,7 @@ def main():
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
 
     loss_dir = 'weighted_loss' if args.weighted_loss else 'average_loss'
-    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{args.training_epochs}epochs_lr{args.learning_rate}_bs8/{model_string}_pp{args.user_id}'
+    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{args.training_epochs}epochs_lr{args.learning_rate}/{model_string}_pp{args.user_id}'
 
     # if args.weight_decay > 0:
     #     model_out_dir += '_wd'

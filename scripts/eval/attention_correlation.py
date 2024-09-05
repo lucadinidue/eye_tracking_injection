@@ -106,9 +106,9 @@ def attention_correlation_base(eye_tracking_dir, src_attention_dir, grouping_var
             epoch = int(checkpoint_dir.split('-')[-1]) * 10           
             extract_layers_correlations(checkpoint_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, epoch, user_id, grouping_variable)
 
-    baseline_attention_dir = os.path.join(src_attention_dir, 'base', 'roberta-base')
-    for epoch in list(set(all_correlation_dict['epoch'])):
-        extract_layers_correlations(baseline_attention_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, epoch, 'no_ft', grouping_variable)
+    # baseline_attention_dir = os.path.join(src_attention_dir, 'base', 'roberta-base')
+    # for epoch in list(set(all_correlation_dict['epoch'])):
+    #     extract_layers_correlations(baseline_attention_dir, eye_tracking_data, args.positive_correlation, all_correlation_dict, epoch, 'no_ft', grouping_variable)
     all_correlations_df = pd.DataFrame.from_dict(all_correlation_dict)
     
     return all_correlations_df
@@ -148,6 +148,9 @@ def main():
     eye_tracking_dir = 'data/geco/dataset/'
     model_attention_dir = args.model_input_directory
     plots_dir = f'results/attention_correlations/{args.downstream_task}'
+    
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
 
     if args.downstream_task == 'base' or 'interleaved' in args.downstream_task:
         grouping_variable = 'epoch'
