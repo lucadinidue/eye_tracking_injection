@@ -3,7 +3,6 @@ import os
 sys.path.append(os.path.abspath('.'))
 
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, DataCollatorWithPadding, TrainingArguments, Trainer
-from modules.modeling.model_utils import get_tokenizer_name
 from complexity_finetuning import load_complexity_dataset
 import evaluate
 import argparse

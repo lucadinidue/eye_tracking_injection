@@ -22,26 +22,24 @@
 
 
 3) Multi-task finetuning 
-  - [ ] Code
-     - [ ] Interleaved dataloader
-     - [ ] Weighted loss
-  - [ ] Eye-gaze perfomances
-  - [ ] Attention correlation
+  - [x] Code
+     - [x] Interleaved dataloader
+     - [x] Weighted loss
+  - [x] Eye-gaze perfomances
   - [ ] Sentiment:
     - [ ] Performances
     - [ ] Attention correlation
-  - [ ] Complexity:
-    - [ ] Performances
-    - [ ] Attention correlation
+  - [x] Complexity:
+    - [x] Performances
+    - [x] Attention correlation
 
 
 4) LoRa adapters
   - [x] Code
   - [ ] Eye-gaze perfomances
-  - [ ] Attention correlation
-    - [ ] Sentiment:
+  - [ ] Sentiment:
     - [ ] Performances
     - [ ] Attention correlation
   - [ ] Complexity:
-    - [x] Performances -> troppo drop per continuare
-    - [ ] Attention correlation
+    - [ ] Performances
+    - [x] Attention correlation
