@@ -98,7 +98,7 @@ def main():
     parser.add_argument('-p', '--positive_correlation', type=bool, default=True, help='Computes the absolute value of correlation coefficients.')
     parser.add_argument('-i', '--models_input_directory', type=str, help='Directory from where to load models\' attentions.')
     parser.add_argument('-s', '--model_string', type=str, help='The string to use to identify the models\' correlations.')
-    parser.add_argument('-o', '--output_path', type=str, default='attentions/all_correlations.json', help='The json file where to save the extracted attentions.')
+    parser.add_argument('-o', '--output_path', type=str, default='attentions/all_correlations_complexity.json', help='The json file where to save the extracted attentions.')
     parser.add_argument('-c', '--all_checkpoints', action='store_true')
     args = parser.parse_args()
 
@@ -106,17 +106,23 @@ def main():
      
     all_correlations_dict = init_correlations_dict(args.output_path, args.model_string)
 
-    for model_name in os.listdir(args.models_input_directory):
-        model_dir = os.path.join(args.models_input_directory, model_name)
-        user_id = int(re.findall(r'pp(\d*)$', model_name)[0])
-        eye_tracking_path = os.path.join(eye_tracking_dir, f'pp{user_id}_dataset_test.csv')
+    if '1.json' in os.listdir(args.models_input_directory): # model not finetuned on eye-tracking
+        eye_tracking_path = os.path.join(eye_tracking_dir, f'pp21_dataset_test.csv')
         eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
-        if not args.all_checkpoints:
-            model_dir = find_last_checkpoint(model_dir)
-            correlation_dict = compute_attention_correlation(model_dir, eye_tracking_data, args.positive_correlation)
-        else: 
-            correlations_dict = compute_attention_correlation_checkpoints(model_dir, eye_tracking_data, args.positive_correlation)  
-        
+        correlation_dict = compute_attention_correlation(args.models_input_directory, eye_tracking_data, args.positive_correlation)
+        user_id = 'no'
+    else:
+        for model_name in os.listdir(args.models_input_directory):
+            model_dir = os.path.join(args.models_input_directory, model_name)
+            user_id = int(re.findall(r'pp(\d*)$', model_name)[0])
+            eye_tracking_path = os.path.join(eye_tracking_dir, f'pp{user_id}_dataset_test.csv')
+            eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
+            if not args.all_checkpoints:
+                model_dir = find_last_checkpoint(model_dir)
+                correlation_dict = compute_attention_correlation(model_dir, eye_tracking_data, args.positive_correlation)
+            else: 
+                correlation_dict = compute_attention_correlation_checkpoints(model_dir, eye_tracking_data, args.positive_correlation)  
+    
     all_correlations_dict[args.model_string][user_id] = correlation_dict
     save_dictionary(all_correlations_dict, args.output_path)    
     

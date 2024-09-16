@@ -365,22 +365,24 @@ class RobertaForInterleavedMultitask(RobertaPreTrainedModel):
         mae_loss = {}
         logits = {}
 
-        if list(labels.keys())[0] == self.downstream_task:
+        if self.downstream_task in list(labels.keys()): # Works for interleaved multitask and "normal" multitask
+        #if list(labels.keys())[0] == self.downstream_task:
             
-            logits = self.sentence_classifier(sequence_output)
-            labels = labels[self.downstream_task]
+            dst_logits = self.sentence_classifier(sequence_output)
+            logits[self.downstream_task] = dst_logits
 
-            labels = labels.to(logits.device)
+            dst_labels = labels[self.downstream_task]
+            dst_labels = dst_labels.to(dst_logits.device)
 
             if self.config.downstream_type == "regression":
                 loss_fct = MSELoss()
-                loss = loss_fct(logits.squeeze(), labels.squeeze())
+                loss = loss_fct(dst_logits.squeeze(), dst_labels.squeeze())
             elif self.config.downstream_type == "classification":
                 loss_fct = CrossEntropyLoss()
-                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            loss =  loss_weights[-1] * loss
+                loss = loss_fct(dst_logits.view(-1, self.num_labels), dst_labels.view(-1))
+            loss = loss_weights[-1] * loss
 
-        else:
+        if self.token_tasks[0] in labels:
             sequence_output = self.dropout(sequence_output)
 
             # Apply softmax to the loss weights

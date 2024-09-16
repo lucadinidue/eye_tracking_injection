@@ -32,6 +32,19 @@ def add_dummy_eye_gaze_features(example):
     return example
 
 
+def predict_silver_labels(model, dataloader, output_path):
+    model.eval()
+    dataset_features = {task:[] for task in TASKS}
+    with torch.no_grad():
+        for el in tqdm(dataloader):
+            logits = model(**el)['logits']
+            for task in TASKS:
+                dataset_features[task].append(logits[task].squeeze().tolist())
+    
+    features_df = pd.DataFrame.from_dict(dataset_features)
+    features_df.to_pickle(output_path)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--user_id', dest='user_id', type=int)
@@ -39,12 +52,15 @@ def main():
     args = parser.parse_args()
 
     model_path = f'models/eye_gaze_finetuning/average_loss/50epochs_lr1e-05/roberta-base_pp{args.user_id}'
-    output_path = f'data/silver_labels/{args.downstream_task}/{args.user_id}.tsv'
+    train_output_path = f'data/silver_labels/{args.downstream_task}/train_{args.user_id}.pkl'
+    test_output_path = f'data/silver_labels/{args.downstream_task}/test_{args.user_id}.pkl'
 
 
     if args.downstream_task == 'complexity':
         train_path = 'data/complexity/complexity_ds_en_train.csv'
         train_dataset = load_complexity_dataset(train_path)
+        test_path = 'data/complexity/complexity_ds_en_test.csv'
+        test_dataset = load_complexity_dataset(test_path)
     else:
         raise NotImplementedError(f'Downstream task "{args.downstream_task}" not implemented yet.')
     
@@ -52,23 +68,20 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained('FacebookAI/roberta-base', add_prefix_space=True)
 
     def preprocess_function(examples):
-        return tokenizer(examples['text'], padding=True, truncation=True)
+        return tokenizer(examples['text'], padding=False, truncation=True)
 
     tokenized_train_dataset = train_dataset.map(preprocess_function, remove_columns=['text'], batched=True)
+    tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['text'], batched=True)
+
     data_collator = DataCollatorForMultiTaskTokenClassification(tokenizer=tokenizer)
     tokenized_train_dataset = tokenized_train_dataset.map(add_dummy_eye_gaze_features)
-    train_dataloader = DataLoader(tokenized_train_dataset, shuffle=False, collate_fn=data_collator, batch_size=1)
+    tokenized_test_dataset = tokenized_test_dataset.map(add_dummy_eye_gaze_features)
 
-    model.eval()
-    dataset_features = {task:[] for task in TASKS}
-    with torch.no_grad():
-        for el in tqdm(train_dataloader):
-            logits = model(**el)['logits']
-            for task in TASKS:
-                dataset_features[task].append(logits[task].squeeze().tolist())
-    
-    features_df = pd.DataFrame.from_dict(dataset_features)
-    features_df.to_csv(output_path, sep='\t')
+    train_dataloader = DataLoader(tokenized_train_dataset, shuffle=False, collate_fn=data_collator, batch_size=1)
+    test_dataloader = DataLoader(tokenized_test_dataset, shuffle=False, collate_fn=data_collator, batch_size=1)
+
+    predict_silver_labels(model, train_dataloader, train_output_path)
+    predict_silver_labels(model, test_dataloader, test_output_path)    
 
 
 

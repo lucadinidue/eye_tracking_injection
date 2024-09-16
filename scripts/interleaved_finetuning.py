@@ -133,6 +133,7 @@ def main():
 
     if args.downstream_task == 'complexity':
         dst_train, dst_test = load_dst_dataset_complexity(tokenizer)
+        dst_label = 'label_complexity'
         downstream_type = 'regression'
         num_labels = 1
     else:
@@ -143,7 +144,7 @@ def main():
     train_dataset = join_datasets(eye_gaze_train, dst_train, args.batch_size)
     test_dataset = {'eye_gaze': eye_gaze_test, 'dst': dst_test}
 
-    data_collator = DataCollatorForInterleavedMultiTask(tokenizer, 'label_complexity', [f'label_{task}' for task in TASKS])
+    data_collator = DataCollatorForInterleavedMultiTask(tokenizer, dst_label, [f'label_{task}' for task in TASKS])
     
    
     mae = evaluate.load('mae')
