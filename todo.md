@@ -21,7 +21,7 @@
     - [x] Attention correlation
 
 
-3) Multi-task finetuning 
+3) Interleaved Multi-task finetuning 
   - [x] Code
      - [x] Interleaved dataloader
      - [x] Weighted loss
@@ -43,3 +43,16 @@
   - [ ] Complexity:
     - [ ] Performances
     - [x] Attention correlation
+
+
+5) Multi-task finetuning with silver labels
+  - [x] Code:
+    - [x] Silver labels predictions
+    - [x] Fine-tuning
+  - [ ] Eye-gaze perfomances
+  - [ ] Sentiment:
+    - [ ] Performances
+    - [ ] Attention correlation
+  - [ ] Complexity:
+    - [ ] Performances
+    - [ ] Attention correlation
