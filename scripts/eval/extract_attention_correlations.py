@@ -8,7 +8,6 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 from modules.data.dataset_utils import create_senteces_from_data
 from modules.data.attention_utils import save_dictionary
 from scipy.stats import spearmanr
-import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
@@ -57,6 +56,7 @@ def compute_correlation(eye_tracking_dataset, model_attention_dict, positive_cor
     return None
 
 def compute_attention_correlation(model_dir, eye_tracking_data, positive_correlation):
+    print(model_dir)
     correlations_dict = {}
     for layer in range(12):
         layer_attention_path = os.path.join(model_dir, f'{layer}.json')
@@ -123,7 +123,7 @@ def main():
             else: 
                 correlation_dict = compute_attention_correlation_checkpoints(model_dir, eye_tracking_data, args.positive_correlation)  
     
-    all_correlations_dict[args.model_string][user_id] = correlation_dict
+            all_correlations_dict[args.model_string][user_id] = correlation_dict
     save_dictionary(all_correlations_dict, args.output_path)    
     
     

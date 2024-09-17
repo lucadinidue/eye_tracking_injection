@@ -17,7 +17,12 @@ def parse_log_history_eval_metrics(log_history):
     """Parse evaluation metrics from the log history."""
     logs_dict = {'epoch': [], 'metric': [], 'score': []}
     for entry in log_history:
-        if 'eval_loss' in entry or 'eval_dst_loss' in entry:
+        if 'eval_complexity' in entry:
+            for metric in ['mae', 'spearmanr']:
+                logs_dict['epoch'].append(entry['epoch'])
+                logs_dict['metric'].append(metric)
+                logs_dict['score'].append(entry['eval_complexity'][metric])
+        elif 'eval_loss' in entry or 'eval_dst_loss' in entry:
             prefix = 'eval_' if 'eval_loss' in entry else 'eval_dst_'
             for metric in ['mae', 'spearmanr']:
                 logs_dict['epoch'].append(entry['epoch'])
@@ -84,6 +89,10 @@ def main():
     create_output_directory(plots_out_dir)
 
     model_dirs = [os.path.join(args.models_input_directory, model_name) for model_name in os.listdir(args.models_input_directory)]
+    
+    is_lora = any('adapters' in model_dir for model_dir in model_dirs)
+    if is_lora:     # the trainer state is in the adapters directory
+        model_dirs = [model_dir for model_dir in model_dirs if 'adapters' in model_dir]
 
     metrics_dfs = []
     for model_dir in model_dirs:
@@ -92,7 +101,7 @@ def main():
             metrics_dfs.append(metrics_df)
 
     # Load performance of the model not fine-tuned on eye-tracking data
-    not_finetuned_dir = 'models/complexity/roberta-base'
+    not_finetuned_dir = 'models/complexity/roberta-base_baseline'
     not_finetuned_metrics_df = load_and_parse_trainer_state(not_finetuned_dir)
     metrics_dfs.append(not_finetuned_metrics_df)
 
