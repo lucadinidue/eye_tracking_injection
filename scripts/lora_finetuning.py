@@ -13,20 +13,15 @@ from transformers import (
     Trainer,    
 )
 
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 import pandas as pd
+import numpy as np
 import argparse
 import evaluate
 
 
-FREEZE_LAYERS_MAP = {
-    'regressor_only': ['classifier'],
-    'last_2': ['classifier', 'encoder.layer.11', ],
-    'last_3': ['classifier', 'encoder.layer.11', 'encoder.layer.10']
-
-}
-
 SEED = 42 
+
 
 def load_complexity_dataset(src_path:str) -> Dataset:
     df = pd.read_csv(src_path)
@@ -36,56 +31,77 @@ def load_complexity_dataset(src_path:str) -> Dataset:
     df = df.rename(columns={'SENTENCE': 'text'})
     return Dataset.from_pandas(df)
 
+
+def load_dst_dataset_complexity(tokenizer):
+    train_path = 'data/complexity/complexity_ds_en_train.csv'
+    test_path = 'data/complexity/complexity_ds_en_test.csv'
+    train_dataset = load_complexity_dataset(train_path)
+    test_dataset = load_complexity_dataset(test_path)
+
+    def preprocess_function(examples):
+        return tokenizer(examples['SENTENCE'], truncation=True)
+
+    tokenized_train_dataset = train_dataset.map(preprocess_function, remove_columns=['SENTENCE'], desc="Running tokenizer on train dataset")
+    tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['SENTENCE'], desc="Running tokenizer on dataset")
+
+    return tokenized_train_dataset, tokenized_test_dataset
+
+
+def load_dst_dataset_sentiment(tokenizer):
+    dataset = load_dataset("sst2")
+
+    def preprocess_function(examples):
+        return tokenizer(examples['sentence'], truncation=True, padding=True)
+
+    tokenized_dataset = dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], batched=True, desc="Running tokenizer on dataset")
+    
+    return tokenized_dataset['train'], tokenized_dataset['validation']
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_path', dest='model_path')
     parser.add_argument('-b', '--batch_size', type=int, default=16)
+    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['complexity', 'sentiment'])
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=5e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
-    parser.add_argument('-f', '--freeze_layers', type=str, default=None)
     args = parser.parse_args()
 
     set_seed(SEED)
 
     model_string = '_'.join(args.model_path.split('/')[-1].split('_')[:2])
-
-    train_path = 'data/complexity/complexity_ds_en_train.csv'
-    test_path = 'data/complexity/complexity_ds_en_test.csv'
-
-    output_dir = os.path.join('models/lora_complexity', model_string)
-
-    
-    train_dataset = load_complexity_dataset(train_path)
-    test_dataset = load_complexity_dataset(test_path)
-
     tokenizer_name = get_tokenizer_name(model_string)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, add_prefix_space=True)
 
-    def preprocess_function(examples):
-        return tokenizer(examples['text'], truncation=True)
+    output_dir = f'models/{args.downstream_task}/lora/{model_string}'
 
-
-    tokenized_train_dataset = train_dataset.map(preprocess_function, desc="Running tokenizer on train dataset")
-    tokenized_test_dataset = test_dataset.map(preprocess_function, desc="Running tokenizer on dataset")
+    if args.downstream_task == 'complexity':
+        train_dataset, test_dataset = load_dst_dataset_complexity(tokenizer)
+        num_labels = 1
+        mae = evaluate.load('mae')
+        spearmanr = evaluate.load("spearmanr")
+        def compute_metrics(eval_pred):
+            logits, labels = eval_pred
+            labels = labels.reshape(-1, 1)
+            res = {
+                    'mae': mae.compute(predictions=logits, references=labels)['mae'],
+                    'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
+                }            
+            return res
+    else:
+        train_dataset, test_dataset = load_dst_dataset_sentiment(tokenizer)
+        num_labels = 2
+        accuracy = evaluate.load("accuracy")
+        def compute_metrics(eval_pred):
+            logits, labels = eval_pred
+            predictions = np.argmax(logits, axis=-1)
+            return accuracy.compute(predictions=predictions, references=labels)
     
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    
-
-
-    mae = evaluate.load('mae')
-    spearmanr = evaluate.load("spearmanr")
-    def compute_metrics(eval_pred):
-        logits, labels = eval_pred
-        labels = labels.reshape(-1, 1)
-        res = {
-                'mae': mae.compute(predictions=logits, references=labels)['mae'],
-                'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
-            }            
-        return res
 
     
-    model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=1)
+    model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=num_labels)
     
 
     lora_config = LoraConfig(
@@ -118,8 +134,8 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_train_dataset,
-        eval_dataset=tokenized_test_dataset,
+        train_dataset=train_dataset,
+        eval_dataset=test_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
