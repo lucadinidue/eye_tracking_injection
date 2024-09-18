@@ -7,8 +7,9 @@ from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMulti
 from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig
 from modules.modeling.custom_trainer import InterleavedMultitaskFinetuningTrainer
 from modules.modeling.custom_data_collator import DataCollatorForInterleavedMultiTask
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 from itertools import cycle
+import numpy as np
 import pandas as pd
 import argparse
 import evaluate
@@ -17,6 +18,7 @@ import evaluate
 SEED = 42
 TASKS = ['firstfix_dur','dur','firstrun_nfix','nfix','firstrun_dur']
  
+
 def load_complexity_dataset(src_path:str) -> Dataset:
     df = pd.read_csv(src_path)
     annotators_columns = [col for col in df.columns if col.startswith('judgement')]
@@ -24,6 +26,7 @@ def load_complexity_dataset(src_path:str) -> Dataset:
     df = df[['SENTENCE', 'label']]
     df = df.rename(columns={'label': 'label_complexity'})
     return Dataset.from_pandas(df)
+
 
 def load_dst_dataset_complexity(tokenizer):
     train_path = 'data/complexity/complexity_ds_en_train.csv'
@@ -42,7 +45,19 @@ def load_dst_dataset_complexity(tokenizer):
     tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['SENTENCE'], desc="Running tokenizer on dataset")
 
     return tokenized_train_dataset, tokenized_test_dataset
+
+
+def load_dst_dataset_sentiment(tokenizer):
+    dataset = load_dataset("sst2")
+    dataset = dataset.rename_column("label", "label_sentiment")
+
+    def preprocess_function(examples):
+        return tokenizer(examples['sentence'], truncation=True, padding=True)
+
+    tokenized_dataset = dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], batched=True, desc="Running tokenizer on dataset")
     
+    return tokenized_dataset['train'], tokenized_dataset['validation']
+
 
 def load_eye_gaze_datasets(user_id, tokenizer):
     train_path = f'data/geco/dataset/pp{user_id}_dataset_train.csv'
@@ -136,10 +151,13 @@ def main():
         dst_label = 'label_complexity'
         downstream_type = 'regression'
         num_labels = 1
+    elif args.downstream_task == 'sentiment':
+        dst_train, dst_test = load_dst_dataset_sentiment(tokenizer)
+        dst_label = 'label_sentiment'
+        downstream_type = 'classification'
+        num_labels = 2
     else:
-        raise Exception(f'Downstream task {args.downstream_task} not implemented yet!')
-        dst_train, dst_test = None, None
-        downstream_type = None
+        raise Exception(f'Downstream task {args.downstream_task} not supported.')
 
     train_dataset = join_datasets(eye_gaze_train, dst_train, args.batch_size)
     test_dataset = {'eye_gaze': eye_gaze_test, 'dst': dst_test}
@@ -149,6 +167,8 @@ def main():
    
     mae = evaluate.load('mae')
     spearmanr = evaluate.load("spearmanr")
+    accuracy = evaluate.load("accuracy")
+
     def compute_metrics_eye_gaze(eval_pred):
         res = dict()
         for task_idx, task in enumerate([f'label_{task}' for task in TASKS]):
@@ -173,9 +193,20 @@ def main():
                 'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
             }           
         return res
+
+    def compute_metrics_accuracy(eval_pred):
+        logits, labels = eval_pred
+        logits = logits['sentiment']
+
+        predictions = np.argmax(logits, axis=-1)
+        return accuracy.compute(predictions=predictions, references=labels)
     
     if args.downstream_task == 'complexity':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_complexity}
+    elif args.downstream_task == 'sentiment':
+        compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_accuracy}
+    else:
+        raise Exception(f'Downstream task {args.downstream_task} not supported.')
 
     
     config = AutoConfig.from_pretrained(args.model_name)

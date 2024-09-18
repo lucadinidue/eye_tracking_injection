@@ -379,7 +379,7 @@ class RobertaForInterleavedMultitask(RobertaPreTrainedModel):
                 loss = loss_fct(dst_logits.squeeze(), dst_labels.squeeze())
             elif self.config.downstream_type == "classification":
                 loss_fct = CrossEntropyLoss()
-                loss = loss_fct(dst_logits.view(-1, self.num_labels), dst_labels.view(-1))
+                loss = loss_fct(dst_logits.view(-1, self.config.num_labels), dst_labels.view(-1))
             loss = loss_weights[-1] * loss
 
         if self.token_tasks[0] in labels:

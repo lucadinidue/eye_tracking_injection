@@ -28,13 +28,6 @@ FREEZE_LAYERS_MAP = {
 
 SEED = 42 
 
-def load_complexity_dataset(src_path:str) -> Dataset:
-    df = pd.read_csv(src_path)
-    annotators_columns = [col for col in df.columns if col.startswith('judgement')]
-    df['label'] = df[annotators_columns].mean(axis=1)
-    df = df[['SENTENCE', 'label']]
-    df = df.rename(columns={'SENTENCE': 'text'})
-    return Dataset.from_pandas(df)
 
 def main():
     parser = argparse.ArgumentParser()

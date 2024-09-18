@@ -144,10 +144,8 @@ def main():
     args = parser.parse_args()
 
     eye_tracking_dir = 'data/geco/dataset/'
-    model_attention_dir = args.model_input_directory
     plot_path = f'results/attention_correlations/{args.output_file}.png'
     
-    # if args.downstream_task == 'base' or 'interleaved' in args.downstream_task:
     grouping_variable = 'epoch'
 
     sample_directory_content = os.listdir(os.path.join(args.model_input_directory, os.listdir(args.model_input_directory)[0]))[0]
