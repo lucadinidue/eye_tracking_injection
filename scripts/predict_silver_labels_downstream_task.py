@@ -2,13 +2,11 @@ import sys
 import os
 sys.path.append(os.path.abspath('.'))
 
-from modules.data.dataset_utils import create_senteces_from_data, scale_datasets, tokenize_and_align_labels
 from modules.modeling.custom_modeling_roberta import RobertaForMultiTaskTokenClassification
 from modules.modeling.custom_data_collator import DataCollatorForMultiTaskTokenClassification
+from datasets import Dataset, load_dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
-from datasets import Dataset
-from torch.nn import MSELoss
 from tqdm import tqdm
 import pandas as pd
 import argparse
@@ -51,18 +49,21 @@ def main():
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['complexity', 'sentiment'])
     args = parser.parse_args()
 
-    model_path = f'models/eye_gaze_finetuning/average_loss/50epochs_lr1e-05/roberta-base_pp{args.user_id}'
+    model_path = f'models/eye_gaze_finetuning/roberta-base_pp{args.user_id}'
     train_output_path = f'data/silver_labels/{args.downstream_task}/train_{args.user_id}.pkl'
     test_output_path = f'data/silver_labels/{args.downstream_task}/test_{args.user_id}.pkl'
 
 
     if args.downstream_task == 'complexity':
         train_path = 'data/complexity/complexity_ds_en_train.csv'
-        train_dataset = load_complexity_dataset(train_path)
         test_path = 'data/complexity/complexity_ds_en_test.csv'
+        train_dataset = load_complexity_dataset(train_path)
         test_dataset = load_complexity_dataset(test_path)
     else:
-        raise NotImplementedError(f'Downstream task "{args.downstream_task}" not implemented yet.')
+        dataset = load_dataset('sst2')
+        dataset = dataset.rename_column("sentence", "text")
+        train_dataset = dataset['train']
+        test_dataset = dataset['validation']
     
     model = RobertaForMultiTaskTokenClassification.from_pretrained(model_path)
     tokenizer = AutoTokenizer.from_pretrained('FacebookAI/roberta-base', add_prefix_space=True)

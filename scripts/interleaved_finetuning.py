@@ -140,7 +140,7 @@ def main():
     model_string = args.model_name.split('/')[-1]
     
 
-    model_out_dir = f'models/interleaved_multitask/{args.downstream_task}/{model_string}_pp{args.user_id}'
+    model_out_dir = f'models/{args.downstream_task}/interleaved_multitask/{model_string}_pp{args.user_id}'
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, add_prefix_space=True)
     
