@@ -80,6 +80,12 @@ def main():
     correlations_dict = load_json(json_correlations_path)
     correlations_df = convert_dict_to_df(correlations_dict)
 
+    # Add user avg
+
+    avg_scores = correlations_df[correlations_df['user'] != 'no'].groupby(['model', 'layer'])['score'].mean().reset_index()
+    avg_scores['user'] = 'avg'
+    correlations_df = pd.concat([correlations_df, avg_scores])
+
     user_ids = correlations_df['user'].unique().tolist()
     vmin, vmax = correlations_df['score'].min(), correlations_df['score'].max()
     fig, axes = plt.subplots(len(user_ids)-1, 1, sharex=True, figsize=(10, 60))
@@ -99,6 +105,7 @@ def main():
             plot.set_title(f'User {user}')
             plot.hlines([1, 7], *plot.get_xlim(), color='white')
             plot.vlines([12], *plot.get_ylim(), color='white')
+
 
     plt.tight_layout()
     fig.savefig(output_path)
