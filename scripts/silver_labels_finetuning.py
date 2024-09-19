@@ -73,8 +73,8 @@ def main():
     
 
     model_out_dir = f'models/silver_labels/{args.downstream_task}/{model_string}_pp{args.user_id}'
-    train_silver_labels_path = f'data/silver_labels/complexity/train_{args.user_id}.pkl'
-    test_silver_labels_path = f'data/silver_labels/complexity/test_{args.user_id}.pkl'
+    train_silver_labels_path = f'data/silver_labels/{args.downstream_task}/train_{args.user_id}.pkl'
+    test_silver_labels_path = f'data/silver_labels/{args.downstream_task}/test_{args.user_id}.pkl'
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, add_prefix_space=True)
     
