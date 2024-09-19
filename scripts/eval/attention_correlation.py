@@ -69,10 +69,13 @@ def plot_correlations(correlation_df, plot_path, grouping_variable='epoch'):
 
     for idx, value in enumerate(var_values):
         pivoted_df = correlation_df[correlation_df[grouping_variable] == value].pivot(index='user', columns='layer', values='correlation')
+        pivoted_df['avg'] = pivoted_df.mean(axis=1)
         plot = sns.heatmap(data=pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)
         axes[idx].set_title(f'{grouping_variable} {value}')
         axes[idx].set_yticklabels(axes[idx].get_yticklabels(), rotation=0)
         plot.hlines([12], *plot.get_xlim(), color='white')
+        plot.vlines([12], *plot.get_ylim(), color='white')
+
 
     plt.tight_layout()
     fig.savefig(plot_path)
@@ -159,7 +162,7 @@ def main():
     # Add average user correlation
     mean_correlation_row = compute_average_user_correlation(all_correlations_df, grouping_variable)
     all_correlations_df = pd.concat([all_correlations_df, mean_correlation_row], ignore_index=True)
-
+    # all_correlations_df['avg'] = all_correlations_df.mean(axis=1)
 
     plot_correlations(all_correlations_df, plot_path, grouping_variable)
 
