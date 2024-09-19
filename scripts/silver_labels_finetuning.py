@@ -5,8 +5,9 @@ sys.path.append(os.path.abspath('.'))
 from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig, Trainer
 from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMultitask
 from modules.modeling.custom_data_collator import DataCollatorForMultiTask
-from datasets import Dataset
+from datasets import Dataset, load_dataset
 import pandas as pd
+import numpy as np
 import argparse
 import evaluate
 
@@ -37,7 +38,10 @@ def load_silver_labels_df(src_path: str) -> pd.DataFrame:
     return df
 
 
-def prepare_complexity_datasets(train_path, test_path, train_silver_labels_df, test_silver_labels_df, tokenizer):
+def prepare_complexity_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer):
+    train_path = 'data/complexity/complexity_ds_en_train.csv'
+    test_path = 'data/complexity/complexity_ds_en_test.csv'
+
     dst_train_df = load_complexity_dataframe(train_path)
     dst_test_df = load_complexity_dataframe(test_path)
 
@@ -52,6 +56,29 @@ def prepare_complexity_datasets(train_path, test_path, train_silver_labels_df, t
 
     tokenized_train_dataset = train_dataset.map(preprocess_function, remove_columns=['SENTENCE'], desc="Running tokenizer on train dataset")
     tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['SENTENCE'], desc="Running tokenizer on train dataset")
+
+    return tokenized_train_dataset, tokenized_test_dataset
+
+def prepare_sentiment_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer):
+    datasets =  load_dataset("sst2")
+    dataset = dataset.rename_column("label", "label_sentiment")
+
+
+    dst_train_df = datasets['train'].to_pandas()
+    dst_test_df = datasets['validation'].to_pandas()
+
+    train_df_joined = join_dataframes(dst_train_df, train_silver_labels_df)
+    test_df_joined = join_dataframes(dst_test_df, test_silver_labels_df)
+
+    train_dataset = Dataset.from_pandas(train_df_joined)
+    test_dataset = Dataset.from_pandas(test_df_joined)
+
+
+    def preprocess_function(examples):
+        return tokenizer(examples['sentence'], truncation=True, padding=True)
+
+    tokenized_train_dataset = train_dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], desc="Running tokenizer on train dataset")
+    tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], desc="Running tokenizer on train dataset")
 
     return tokenized_train_dataset, tokenized_test_dataset
 
@@ -83,42 +110,45 @@ def main():
 
 
     if args.downstream_task == 'complexity':
-        train_path = 'data/complexity/complexity_ds_en_train.csv'
-        test_path = 'data/complexity/complexity_ds_en_test.csv'
         downstream_type = 'regression'
         dst_label = 'label_complexity'
         num_labels = 1
-        train_dataset, test_dataset = prepare_complexity_datasets(train_path, test_path, train_silver_labels_df, test_silver_labels_df, tokenizer)
+        train_dataset, test_dataset = prepare_complexity_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer)
 
     else:
-        raise Exception(f'Downstream task {args.downstream_task} not implemented yet!')
-        dst_train, dst_test = None, None
-        downstream_type = None
+        downstream_type = 'classification'
+        dst_label = 'label_sentiment'
+        num_labels = 2
+        train_dataset, test_dataset =  prepare_sentiment_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer)
 
 
     data_collator = DataCollatorForMultiTask(dst_label=dst_label, eye_gaze_labels=[f'label_{task}' for task in TASKS], tokenizer=tokenizer)
     
    
     mae = evaluate.load('mae')
-    spearmanr = evaluate.load("spearmanr")
+    spearmanr = evaluate.load('spearmanr')
+    accuracy = evaluate.load('accuracy')
     def compute_metrics(eval_pred):
         res = dict()
         for task_idx, task in enumerate([f'{task}' for task in TASKS] + ['complexity']):
-            # print('task idx - task')
-            # print(task_idx, task)
-            labels = eval_pred.label_ids[task_idx].flatten()
-            predictions = eval_pred.predictions[task].squeeze().flatten()
-            # print('labels', len(labels))
-            # print('predictions', len(predictions))
-            if task_idx != 'complexity':
-                not_masked_labels = labels != -100
-                labels = labels[not_masked_labels]
-                predictions = predictions[not_masked_labels]
+            if task != 'sentiment':
+                labels = eval_pred.label_ids[task_idx].flatten()
+                predictions = eval_pred.predictions[task].squeeze().flatten()
+                if task != 'complexity':
+                    not_masked_labels = labels != -100
+                    labels = labels[not_masked_labels]
+                    predictions = predictions[not_masked_labels]
+                
+                    res[task] = {
+                        'mae': mae.compute(predictions=predictions, references=labels)['mae'],
+                        'spearmanr': spearmanr.compute(predictions=predictions, references=labels)['spearmanr']
+                    }
+            else:
+                logits, labels = eval_pred
+                logits = logits['sentiment']
 
-            res[task] = {
-                'mae': mae.compute(predictions=predictions, references=labels)['mae'],
-                'spearmanr': spearmanr.compute(predictions=predictions, references=labels)['spearmanr']
-            }
+                predictions = np.argmax(logits, axis=-1)
+                res[task] =  accuracy.compute(predictions=predictions, references=labels)
         return res
     
     
