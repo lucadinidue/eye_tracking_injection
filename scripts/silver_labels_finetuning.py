@@ -61,8 +61,7 @@ def prepare_complexity_datasets(train_silver_labels_df, test_silver_labels_df, t
 
 def prepare_sentiment_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer):
     datasets =  load_dataset("sst2")
-    dataset = dataset.rename_column("label", "label_sentiment")
-
+    datasets = datasets.rename_column("label", "label_sentiment")
 
     dst_train_df = datasets['train'].to_pandas()
     dst_test_df = datasets['validation'].to_pandas()
