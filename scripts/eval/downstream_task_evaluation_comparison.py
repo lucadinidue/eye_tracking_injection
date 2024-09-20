@@ -5,6 +5,18 @@ import json
 import os
 import re
 
+labels_map = {
+    'full_model': 'ALL',
+    'last_3': 'L3',
+    'last_2': 'L2',
+    'regressor_only': 'REGR',
+    'lora': 'LORA',
+    'interleaved_multitask': 'IL-M',
+    'silver_labels': 'SILV',
+    'complexity_only': 'BL'
+}
+
+
 sns.set_style('darkgrid')
 
 def load_trainer_state(model_dir):
@@ -70,6 +82,8 @@ def load_metrics_dataframe(src_dir):
 
 def plot_metrics(df, metric, output_path):
     plot = sns.heatmap(data=df, annot=True, cmap='crest' if metric == 'spearmanr' else 'crest_r', cbar=False);
+    plot.set_yticklabels(plot.get_yticklabels(), rotation=0)
+    # plot.set_xticklabels(plot.get_xticklabels(), rotation=-45)
     plot.vlines([7], *plot.get_ylim(), color='white');
     plot.set_title(metric.upper())
     plot.figure.tight_layout()
@@ -94,6 +108,7 @@ def main():
         pivoted_df = metric_df.pivot(index='user', columns='model', values='score')
         pivoted_df['complexity_only'] = baseline_metrics[metric]
         pivoted_df = pivoted_df.reindex(['full_model', 'last_3', 'last_2', 'regressor_only', 'lora', 'interleaved_multitask', 'silver_labels', 'complexity_only'], axis=1)
+        pivoted_df = pivoted_df.rename(columns=labels_map)
         plot_metrics(pivoted_df, metric, f'{plots_out_dir}/{metric}_comparison.png')
     
     
