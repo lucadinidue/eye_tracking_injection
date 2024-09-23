@@ -89,7 +89,7 @@ def main():
                     'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
                 }            
             return res
-    else:
+    elif args.downstream_task == 'sentiment':
         train_dataset, test_dataset = load_dst_dataset_sentiment(tokenizer)
         num_labels = 2
         accuracy = evaluate.load("accuracy")
@@ -97,6 +97,8 @@ def main():
             logits, labels = eval_pred
             predictions = np.argmax(logits, axis=-1)
             return accuracy.compute(predictions=predictions, references=labels)
+    else:
+        raise Exception(f'Task {args.downstream_task} not implemented.')
     
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
@@ -144,7 +146,7 @@ def main():
     trainer.save_model(output_dir+'_adapters')
     trainer.save_state()
 
-    original_model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=1)
+    original_model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=num_labels)
     original_with_adapter = PeftModel.from_pretrained(original_model, output_dir+'_adapters')
     merged_model = original_with_adapter.merge_and_unload()
     merged_model.save_pretrained(output_dir)    

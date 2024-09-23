@@ -129,7 +129,7 @@ def main():
     accuracy = evaluate.load('accuracy')
     def compute_metrics(eval_pred):
         res = dict()
-        for task_idx, task in enumerate([f'{task}' for task in TASKS] + ['complexity']):
+        for task_idx, task in enumerate([f'{task}' for task in TASKS] + [args.downstream_task]):
             if task != 'sentiment':
                 labels = eval_pred.label_ids[task_idx].flatten()
                 predictions = eval_pred.predictions[task].squeeze().flatten()
@@ -145,7 +145,7 @@ def main():
             else:
                 logits, labels = eval_pred
                 logits = logits['sentiment']
-
+                labels = labels[task_idx].flatten()
                 predictions = np.argmax(logits, axis=-1)
                 res[task] =  accuracy.compute(predictions=predictions, references=labels)
         return res
@@ -175,7 +175,7 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
+        train_dataset=train_dataset.select(range(100)),
         eval_dataset=test_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,

@@ -371,7 +371,7 @@ class RobertaForInterleavedMultitask(RobertaPreTrainedModel):
             dst_logits = self.sentence_classifier(sequence_output)
             logits[self.downstream_task] = dst_logits
 
-            dst_labels = labels[self.downstream_task]
+            dst_labels = labels[self.downstream_task].type(torch.LongTensor) 
             dst_labels = dst_labels.to(dst_logits.device)
 
             if self.config.downstream_type == "regression":
@@ -380,6 +380,7 @@ class RobertaForInterleavedMultitask(RobertaPreTrainedModel):
             elif self.config.downstream_type == "classification":
                 loss_fct = CrossEntropyLoss()
                 loss = loss_fct(dst_logits.view(-1, self.config.num_labels), dst_labels.view(-1))
+
             loss = loss_weights[-1] * loss
 
         if self.token_tasks[0] in labels:
