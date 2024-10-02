@@ -3,7 +3,7 @@ import os
 sys.path.append(os.path.abspath('.'))
 
 from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig, Trainer
-from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMultitask
+from modules.modeling.custom_modeling_roberta import  RobertaForSilverLabelMultitask
 from modules.modeling.custom_data_collator import DataCollatorForMultiTask
 from datasets import Dataset, load_dataset
 import pandas as pd
@@ -22,10 +22,6 @@ def load_complexity_dataframe(src_path:str) -> pd.DataFrame:
     df = df[['SENTENCE', 'label']]
     df = df.rename(columns={'label': 'label_complexity'})
     return df
-
-
-def join_dataframes(dst_df, silver_eye_gaze_labels):
-    return pd.concat([dst_df, silver_eye_gaze_labels], axis=1)
 
 
 def join_dataframes(dst_df, silver_eye_gaze_labels):
@@ -155,7 +151,7 @@ def main():
     config.update({'token_tasks': TASKS,  'donwstream_task': args.downstream_task, 'downstream_type': downstream_type, 'keys_to_ignore_at_inference':['mse_loss', 'mae_loss', 'labels']})
     config.num_labels = num_labels
 
-    model = RobertaForInterleavedMultitask.from_pretrained(args.model_name, config=config)
+    model = RobertaForSilverLabelMultitask.from_pretrained(args.model_name, config=config)
 
     training_args = TrainingArguments(
         output_dir=model_out_dir, 
@@ -175,7 +171,7 @@ def main():
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset.select(range(100)),
+        train_dataset=train_dataset,
         eval_dataset=test_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,

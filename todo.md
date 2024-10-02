@@ -5,7 +5,7 @@
   - [x] Eye-gaze perfomances
   - [x] Attention correlation
   - [ ] Sentiment:
-    - [ ] Performances
+    - [x] Performances
     - [ ] Attention correlation
   - [x] Complexity:
     - [x] Performances
@@ -14,7 +14,7 @@
 2) Partial DST finetuning
   - [x] Code
   - [ ] Sentiment:
-    - [ ] Performances
+    - [x] Performances
     - [ ] Attention correlation
   - [x] Complexity:
     - [x] Performances
@@ -27,7 +27,7 @@
      - [x] Weighted loss
   - [x] Eye-gaze perfomances
   - [ ] Sentiment:
-    - [ ] Performances
+    - [x] Performances
     - [ ] Attention correlation
   - [x] Complexity:
     - [x] Performances
@@ -36,12 +36,11 @@
 
 4) LoRa adapters
   - [x] Code
-  - [ ] Eye-gaze perfomances
   - [ ] Sentiment:
-    - [ ] Performances
+    - [x] Performances
     - [ ] Attention correlation
-  - [ ] Complexity:
-    - [ ] Performances
+  - [x] Complexity:
+    - [x] Performances
     - [x] Attention correlation
 
 
@@ -49,10 +48,9 @@
   - [x] Code:
     - [x] Silver labels predictions
     - [x] Fine-tuning
-  - [ ] Eye-gaze perfomances
   - [ ] Sentiment:
-    - [ ] Performances
+    - [x] Performances
     - [ ] Attention correlation
-  - [ ] Complexity:
-    - [ ] Performances
-    - [ ] Attention correlation
+  - [x] Complexity:
+    - [x] Performances
+    - [x] Attention correlation

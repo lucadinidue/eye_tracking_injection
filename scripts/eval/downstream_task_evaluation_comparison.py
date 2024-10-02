@@ -93,8 +93,6 @@ def load_baseline_scores(src_path, task):
 def load_metrics_dataframe(src_dir, task):
     metrics_dfs = []
     for finetuning_config in os.listdir(src_dir):
-        if finetuning_config == 'lora':
-            continue
         config_path = os.path.join(src_dir, finetuning_config)
         if not 'trainer_state.json' in os.listdir(config_path):
             for user_dir_name in os.listdir(config_path):
