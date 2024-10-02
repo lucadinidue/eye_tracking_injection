@@ -94,11 +94,11 @@ def main():
 
     for idx, user in enumerate(sorted(user_ids)):
         user_df = correlations_df[correlations_df['user']==user]
-        if user != 'no': #'base' in user_df[user_df['user'] == user]['model'].tolist():
+        if user != 'no':
             user_df = pd.concat([user_df, only_complexity_df], axis=0)
 
             pivoted_df = user_df.pivot(index='model', columns='layer', values='score')
-            pivoted_df = pivoted_df.reindex(['base', 'complexity_full', 'complexity_last_3', 'complexity_last_2', 'complexity_lora', 'complexity_interleaved', 'complexity_silver_labels', 'complexity_only'])
+            pivoted_df = pivoted_df.reindex(['base', f'{args.downstream_task}_full', f'{args.downstream_task}_last_3', f'{args.downstream_task}_last_2', f'{args.downstream_task}_lora', f'{args.downstream_task}_interleaved', f'{args.downstream_task}_silver_labels', f'{args.downstream_task}_only'])
             pivoted_df['avg'] = pivoted_df.mean(axis=1)
 
             plot = sns.heatmap(pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)

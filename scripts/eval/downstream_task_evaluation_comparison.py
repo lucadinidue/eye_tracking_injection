@@ -10,10 +10,12 @@ labels_map = {
     'last_3': 'L3',
     'last_2': 'L2',
     'regressor_only': 'REGR',
+    'classifier_only': 'CLF',
     'lora': 'LORA',
     'interleaved_multitask': 'IL-M',
     'silver_labels': 'SILV',
-    'complexity_only': 'BL'
+    'complexity_only': 'BL',
+    'sentiment_only': 'BL'
 }
 
 
@@ -139,7 +141,8 @@ def main():
         metric_df = metrics_df[metrics_df['metric'] == metric]
         pivoted_df = metric_df.pivot(index='user', columns='model', values='score')
         pivoted_df[f'{args.downstream_task}_only'] = baseline_metrics[metric]
-        pivoted_df = pivoted_df.reindex(['full_model', 'last_3', 'last_2', 'regressor_only', 'lora', 'interleaved_multitask', 'silver_labels', f'{args.downstream_task}_only'], axis=1)
+        clf_or_regressor_str = 'regressor_only' if 'regressor_only' in pivoted_df else 'classifier_only'
+        pivoted_df = pivoted_df.reindex(['full_model', 'last_3', 'last_2', clf_or_regressor_str, 'lora', 'interleaved_multitask', 'silver_labels', f'{args.downstream_task}_only'], axis=1)
         pivoted_df = pivoted_df.rename(columns=labels_map)
         plot_metrics(pivoted_df, metric, f'{plots_out_dir}/{metric}_comparison.png')
     

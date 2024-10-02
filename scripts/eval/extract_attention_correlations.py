@@ -56,7 +56,6 @@ def compute_correlation(eye_tracking_dataset, model_attention_dict, positive_cor
     return None
 
 def compute_attention_correlation(model_dir, eye_tracking_data, positive_correlation):
-    print(model_dir)
     correlations_dict = {}
     for layer in range(12):
         layer_attention_path = os.path.join(model_dir, f'{layer}.json')
@@ -98,7 +97,7 @@ def main():
     parser.add_argument('-p', '--positive_correlation', type=bool, default=True, help='Computes the absolute value of correlation coefficients.')
     parser.add_argument('-i', '--models_input_directory', type=str, help='Directory from where to load models\' attentions.')
     parser.add_argument('-s', '--model_string', type=str, help='The string to use to identify the models\' correlations.')
-    parser.add_argument('-o', '--output_path', type=str, default='attentions/all_correlations_complexity.json', help='The json file where to save the extracted attentions.')
+    parser.add_argument('-o', '--output_path', type=str, help='The json file where to save the extracted attentions.')
     parser.add_argument('-c', '--all_checkpoints', action='store_true')
     args = parser.parse_args()
 
@@ -111,6 +110,7 @@ def main():
         eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
         correlation_dict = compute_attention_correlation(args.models_input_directory, eye_tracking_data, args.positive_correlation)
         user_id = 'no'
+        all_correlations_dict[args.model_string][user_id] = correlation_dict
     else:
         for model_name in os.listdir(args.models_input_directory):
             model_dir = os.path.join(args.models_input_directory, model_name)
