@@ -74,8 +74,8 @@ def main():
     parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['complexity', 'sentiment'], help='Indicates the downstream task on which the model has been finetuned.')
     args = parser.parse_args()
 
-    json_correlations_path = f'attentions/all_correlations_{args.downstream_task}.json'
-    output_path = f'results/attention_correlations/{args.downstream_task}_comparison.png'
+    json_correlations_path = f'attentions_2/all_correlations_{args.downstream_task}.json'
+    output_path = f'results/attention_correlations/{args.downstream_task}_comparison_2.png'
 
     correlations_dict = load_json(json_correlations_path)
     correlations_df = convert_dict_to_df(correlations_dict)
@@ -90,12 +90,11 @@ def main():
     vmin, vmax = correlations_df['score'].min(), correlations_df['score'].max()
     fig, axes = plt.subplots(len(user_ids)-1, 1, sharex=True, figsize=(10, 60))
 
-    only_complexity_df = correlations_df[correlations_df['user']=='no']
-
+    only_dst_df = correlations_df[correlations_df['user']=='no']
     for idx, user in enumerate(sorted(user_ids)):
         user_df = correlations_df[correlations_df['user']==user]
         if user != 'no':
-            user_df = pd.concat([user_df, only_complexity_df], axis=0)
+            user_df = pd.concat([user_df, only_dst_df], axis=0)
 
             pivoted_df = user_df.pivot(index='model', columns='layer', values='score')
             pivoted_df = pivoted_df.reindex(['base', f'{args.downstream_task}_full', f'{args.downstream_task}_last_3', f'{args.downstream_task}_last_2', f'{args.downstream_task}_lora', f'{args.downstream_task}_interleaved', f'{args.downstream_task}_silver_labels', f'{args.downstream_task}_only'])

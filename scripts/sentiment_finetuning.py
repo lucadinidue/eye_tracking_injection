@@ -42,7 +42,7 @@ def main():
     set_seed(SEED)
 
     model_string = '_'.join(args.model_path.split('/')[-1].split('_')[:2])
-    output_dir = os.path.join('models/sentiment', model_string)
+    output_dir = os.path.join('models/sentiment/prova_freeze', model_string)
 
     dataset = load_dataset("sst2")
     
@@ -69,16 +69,9 @@ def main():
     
     model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=2)
 
-    if args.freeze_layers is not None:
-        output_dir += '_' + args.freeze_layers
-        not_freeze_weights = FREEZE_LAYERS_MAP[args.freeze_layers]
-        for name, param in model.named_parameters():
-            requires_grad = False
-            for not_freeze_str in not_freeze_weights:
-                if not_freeze_str in name:
-                    requires_grad = True  
-            param.requires_grad = requires_grad
-    
+    print('freeze layers')
+    print(FREEZE_LAYERS_MAP[args.freeze_layers])
+
 
     if args.freeze_layers is not None:
         output_dir += '_' + args.freeze_layers
