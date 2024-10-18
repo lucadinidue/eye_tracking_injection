@@ -72,10 +72,11 @@ def get_last_epoch_eval_metrics(model_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['complexity', 'sentiment'], help='Indicates the downstream task on which the model has been finetuned.')
+    parser.add_argument('-c', '--model_config')
     args = parser.parse_args()
 
-    json_correlations_path = f'attentions_2/all_correlations_{args.downstream_task}.json'
-    output_path = f'results/attention_correlations/{args.downstream_task}_comparison_2.png'
+    json_correlations_path = f'attentions/all_correlations_{args.downstream_task}_{args.model_config}.json'
+    output_path = f'results/attention_correlations/{args.downstream_task}_{args.model_config}comparison.png'
 
     correlations_dict = load_json(json_correlations_path)
     correlations_df = convert_dict_to_df(correlations_dict)

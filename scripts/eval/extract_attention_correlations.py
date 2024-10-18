@@ -75,10 +75,10 @@ def compute_attention_correlation_checkpoints(model_dir, eye_tracking_data, posi
 
 def find_last_checkpoint(model_dir):
     dir_content = os.listdir(model_dir)
-    if dir_content[0].startswith('checkpoint'):
-        checkpoints = [int(el.split('-')[-1]) for el in dir_content]
+    if dir_content[0].startswith('epoch'):
+        checkpoints = [int(el.split('_')[-1]) for el in dir_content]
         last_checkpoint = sorted(checkpoints)[-1]
-        return os.path.join(model_dir, f'checkpoint-{last_checkpoint}')
+        return os.path.join(model_dir, f'epoch_{last_checkpoint}')
     else:
         return model_dir
 

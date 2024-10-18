@@ -1,7 +1,10 @@
 import os
 import sys
-
 sys.path.append(os.path.abspath(".")) 
+
+import torch
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 from modules.data.attention_utils import create_subwords_alignment, save_dictionary
 from modules.data.dataset_utils import create_senteces_from_data
 from modules.modeling.model_utils import get_tokenizer_name
@@ -10,9 +13,7 @@ from transformers import AutoTokenizer, AutoModelForMaskedLM
 from tqdm import tqdm
 import pandas as pd
 import argparse
-import torch
 import re
-import os
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

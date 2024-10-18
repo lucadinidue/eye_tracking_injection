@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 from modules.modeling.model_utils import get_tokenizer_name
 from transformers import (
@@ -37,12 +38,13 @@ def main():
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=3)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-f', '--freeze_layers', type=str, default=None)
+    parser.add_argument('-o', '--output_dir')
     args = parser.parse_args()
 
     set_seed(SEED)
 
     model_string = '_'.join(args.model_path.split('/')[-1].split('_')[:2])
-    output_dir = os.path.join('models/sentiment/prova_freeze', model_string)
+    output_dir = args.output_dir#os.path.join('models/sentiment/prova_freeze', model_string)
 
     dataset = load_dataset("sst2")
     
@@ -69,12 +71,9 @@ def main():
     
     model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=2)
 
-    print('freeze layers')
-    print(FREEZE_LAYERS_MAP[args.freeze_layers])
-
 
     if args.freeze_layers is not None:
-        output_dir += '_' + args.freeze_layers
+        # output_dir += '_' + args.freeze_layers
         not_freeze_weights = FREEZE_LAYERS_MAP[args.freeze_layers]
         for name, param in model.named_parameters():
             requires_grad = False

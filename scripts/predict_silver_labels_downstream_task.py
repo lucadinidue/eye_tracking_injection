@@ -45,11 +45,12 @@ def predict_silver_labels(model, dataloader, output_path):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-m', '--model_path')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int)
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['complexity', 'sentiment'])
     args = parser.parse_args()
 
-    model_path = f'models/eye_gaze_finetuning/roberta-base_pp{args.user_id}'
+    model_path = args.model_path #f'models/eye_gaze_finetuning/roberta-base_pp{args.user_id}'
     train_output_path = f'data/silver_labels/{args.downstream_task}/train_{args.user_id}.pkl'
     test_output_path = f'data/silver_labels/{args.downstream_task}/test_{args.user_id}.pkl'
 

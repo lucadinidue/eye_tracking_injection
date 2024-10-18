@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig, Trainer
 from modules.modeling.custom_modeling_roberta import  RobertaForSilverLabelMultitask
@@ -87,6 +88,7 @@ def main():
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity'])
+    parser.add_argument('-o', '--output_path')
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -94,7 +96,7 @@ def main():
     model_string = args.model_name.split('/')[-1]
     
 
-    model_out_dir = f'models/silver_labels/{args.downstream_task}/{model_string}_pp{args.user_id}'
+    model_out_dir = args.output_path #f'models/silver_labels/{args.downstream_task}/{model_string}_pp{args.user_id}'
     train_silver_labels_path = f'data/silver_labels/{args.downstream_task}/train_{args.user_id}.pkl'
     test_silver_labels_path = f'data/silver_labels/{args.downstream_task}/test_{args.user_id}.pkl'
 
@@ -164,7 +166,8 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy='epoch',
+        save_strategy='no'
+        #save_strategy='epoch',
         )
     
 

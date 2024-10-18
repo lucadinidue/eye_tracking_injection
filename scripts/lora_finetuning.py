@@ -1,6 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 from modules.modeling.model_utils import get_tokenizer_name
 from peft import LoraConfig, get_peft_model, TaskType, PeftModel
@@ -28,7 +29,7 @@ def load_complexity_dataset(src_path:str) -> Dataset:
     annotators_columns = [col for col in df.columns if col.startswith('judgement')]
     df['label'] = df[annotators_columns].mean(axis=1)
     df = df[['SENTENCE', 'label']]
-    df = df.rename(columns={'SENTENCE': 'text'})
+    # df = df.rename(columns={'SENTENCE': 'text'})
     return Dataset.from_pandas(df)
 
 
@@ -66,6 +67,7 @@ def main():
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=5e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
+    parser.add_argument('-o', '--output_dir')
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -74,7 +76,7 @@ def main():
     tokenizer_name = get_tokenizer_name(model_string)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, add_prefix_space=True)
 
-    output_dir = f'models/{args.downstream_task}/lora/{model_string}'
+    output_dir = args.output_dir #f'models/{args.downstream_task}/lora/{model_string}'
 
     if args.downstream_task == 'complexity':
         train_dataset, test_dataset = load_dst_dataset_complexity(tokenizer)

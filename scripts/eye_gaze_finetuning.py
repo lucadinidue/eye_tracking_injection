@@ -1,6 +1,8 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
+import torch
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 from modules.data.dataset_utils import create_senteces_from_data, scale_datasets, tokenize_and_align_labels
 from modules.modeling.custom_modeling_roberta import RobertaForMultiTaskTokenClassification, RobertaForMultiTaskTokenClassificationWithWeight
@@ -33,11 +35,9 @@ def main():
     test_path = f'data/geco/dataset/pp{args.user_id}_dataset_test.csv'
 
     loss_dir = 'weighted_loss' if args.weighted_loss else 'average_loss'
-    model_out_dir = f'models/eye_gaze_finetuning/{loss_dir}/{args.training_epochs}epochs_lr{args.learning_rate}/{model_string}_pp{args.user_id}'
+    model_out_dir = f'models/eye_gaze_finetuning/{args.training_epochs}epochs_lr{args.learning_rate}_nowd/{model_string}_pp{args.user_id}'
 
-    # if args.weight_decay > 0:
-    #     model_out_dir += '_wd'
-    
+    print(model_out_dir)
 
     train_df = pd.read_csv(train_path, index_col=0)
     test_df = pd.read_csv(test_path, index_col=0)
@@ -92,10 +92,10 @@ def main():
     config = AutoConfig.from_pretrained(args.model_name)
     config.update({'tasks': TASKS, 'keys_to_ignore_at_inference':['mse_loss', 'mae_loss', 'labels']})
 
-    if args.weighted_loss:
-        model = RobertaForMultiTaskTokenClassificationWithWeight.from_pretrained(args.model_name, config=config)
-    else:
-        model = RobertaForMultiTaskTokenClassification.from_pretrained(args.model_name, config=config)
+#    if args.weighted_loss:
+#        model = RobertaForMultiTaskTokenClassificationWithWeight.from_pretrained(args.model_name, config=config)
+#    else:
+    model = RobertaForMultiTaskTokenClassification.from_pretrained(args.model_name, config=config)
     
 
     training_args = TrainingArguments(
@@ -110,7 +110,7 @@ def main():
         save_steps=num_epoch_steps*10,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy = 'steps' if args.training_epochs > 10 else 'no'
+        save_strategy = 'no' #'steps' if args.training_epochs > 10 else 'no'
         )
     
 

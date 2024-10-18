@@ -1,6 +1,8 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
+import torch
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 from modules.modeling.model_utils import get_tokenizer_name
 from transformers import (
@@ -43,6 +45,7 @@ def main():
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-f', '--freeze_layers', type=str, default=None)
+    parser.add_argument('-o', '--output_dir')
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -52,7 +55,7 @@ def main():
     train_path = 'data/complexity/complexity_ds_en_train.csv'
     test_path = 'data/complexity/complexity_ds_en_test.csv'
 
-    output_dir = os.path.join('models/complexity', model_string)
+    # output_dir = os.path.join('models/complexity', model_string)
 
     
     train_dataset = load_complexity_dataset(train_path)
@@ -88,7 +91,6 @@ def main():
     
 
     if args.freeze_layers is not None:
-        output_dir += '_' + args.freeze_layers
         not_freeze_weights = FREEZE_LAYERS_MAP[args.freeze_layers]
         for name, param in model.named_parameters():
             requires_grad = False
@@ -99,10 +101,10 @@ def main():
 
 
     training_args = TrainingArguments(
-        output_dir=output_dir, 
+        output_dir=args.output_dir, 
         eval_strategy='epoch',
         logging_strategy='epoch',
-        logging_dir=output_dir,
+        logging_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         num_train_epochs=args.training_epochs,
@@ -123,7 +125,7 @@ def main():
     )
 
     trainer.train()
-    trainer.save_model(output_dir)
+    trainer.save_model(args.output_dir)
     trainer.save_state()
 
 

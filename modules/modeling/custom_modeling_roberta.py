@@ -366,12 +366,14 @@ class RobertaForInterleavedMultitask(RobertaPreTrainedModel):
         logits = {}
 
         if self.downstream_task in list(labels.keys()): # Works for interleaved multitask and "normal" multitask
-        #if list(labels.keys())[0] == self.downstream_task:
             
             dst_logits = self.sentence_classifier(sequence_output)
             logits[self.downstream_task] = dst_logits
 
-            dst_labels = labels[self.downstream_task].type(torch.LongTensor) 
+            if self.config.downstream_type == "regression":
+                dst_labels = labels[self.downstream_task]
+            else:
+                dst_labels = labels[self.downstream_task].type(torch.LongTensor)  
             dst_labels = dst_labels.to(dst_logits.device)
 
             if self.config.downstream_type == "regression":
@@ -550,7 +552,11 @@ class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
         dst_logits = self.sentence_classifier(sequence_output)
         logits[self.downstream_task] = dst_logits
 
-        dst_labels = labels[self.downstream_task].type(torch.LongTensor) 
+        if self.config.downstream_type == "regression":
+            dst_labels = labels[self.downstream_task]
+        else:
+            dst_labels = labels[self.downstream_task].type(torch.LongTensor)  
+
         dst_labels = dst_labels.to(dst_logits.device)
 
         if self.config.downstream_type == "regression":

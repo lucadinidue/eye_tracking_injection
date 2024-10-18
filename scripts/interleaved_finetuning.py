@@ -1,9 +1,10 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
 
 from modules.data.dataset_utils import create_senteces_from_data, scale_datasets, tokenize_and_align_labels
-from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMultitask
+from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMultitask, RobertaForSilverLabelMultitask
 from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig
 from modules.modeling.custom_trainer import InterleavedMultitaskFinetuningTrainer
 from modules.modeling.custom_data_collator import DataCollatorForInterleavedMultiTask
@@ -133,6 +134,7 @@ def main():
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity'])
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
+    parser.add_argument('-o', '--output_dir')
     args = parser.parse_args()
 
     set_seed(SEED)
@@ -140,7 +142,8 @@ def main():
     model_string = args.model_name.split('/')[-1]
     
 
-    model_out_dir = f'models/{args.downstream_task}/interleaved_multitask/{model_string}_pp{args.user_id}'
+    # model_out_dir = f'models/{args.downstream_task}/interleaved_multitask/{model_string}_pp{args.user_id}'
+    model_out_dir = args.output_dir
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, add_prefix_space=True)
     
@@ -187,7 +190,9 @@ def main():
 
     def compute_metrics_complexity(eval_pred):
         logits, labels = eval_pred
+        logits = logits['complexity']
         labels = labels.reshape(-1, 1)
+
         res = {
                 'mae': mae.compute(predictions=logits, references=labels)['mae'],
                 'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
@@ -227,7 +232,8 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy='epoch',
+        save_strategy='no'
+        #save_strategy='epoch',
         )
     
 
