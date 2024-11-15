@@ -72,11 +72,14 @@ def get_last_epoch_eval_metrics(model_dir):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['complexity', 'sentiment'], help='Indicates the downstream task on which the model has been finetuned.')
+    parser.add_argument('-a', '--attention_type', type=str, choices=['attention', 'valuezeroing'])
     parser.add_argument('-c', '--model_config')
     args = parser.parse_args()
 
-    json_correlations_path = f'attentions/all_correlations_{args.downstream_task}_{args.model_config}.json'
-    output_path = f'results/attention_correlations/{args.downstream_task}_{args.model_config}comparison.png'
+    correlations_dir_name = 'attentions' if args.attention_type == 'attention' else 'valuezeroing'
+
+    json_correlations_path = f'{correlations_dir_name}/all_correlations_{args.downstream_task}_{args.model_config}.json'
+    output_path = f'results/{args.attention_type}_correlations/{args.downstream_task}_{args.model_config}comparison.png'
 
     correlations_dict = load_json(json_correlations_path)
     correlations_df = convert_dict_to_df(correlations_dict)
@@ -89,7 +92,7 @@ def main():
 
     user_ids = correlations_df['user'].unique().tolist()
     vmin, vmax = correlations_df['score'].min(), correlations_df['score'].max()
-    fig, axes = plt.subplots(len(user_ids)-1, 1, sharex=True, figsize=(10, 60))
+    fig, axes = plt.subplots(len(user_ids), 1, sharex=True, figsize=(10, 60))
 
     only_dst_df = correlations_df[correlations_df['user']=='no']
     for idx, user in enumerate(sorted(user_ids)):

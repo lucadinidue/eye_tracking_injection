@@ -144,10 +144,11 @@ def main():
     parser.add_argument('-i', '--model_input_directory', type=str, help='Model configuration.')
     parser.add_argument('-o', '--ouput_file', dest='output_file', type=str, help='Name of the file where to save the plots')
     parser.add_argument('-t', '--downstream_task', type=str, default='base', choices=['base', 'complexity', 'sentiment', 'interleaved_complexity'], help='Indicates the downstream task on which the model has been finetuned.')
+    parser.add_argument('-a', '--attention_type', type=str, default=['attention', 'valuezeroing'])
     args = parser.parse_args()
 
     eye_tracking_dir = 'data/geco/dataset/'
-    plot_path = f'results/attention_correlations/{args.output_file}.png'
+    plot_path = f'results/{args.attention_type}/{args.output_file}.png'
     
     grouping_variable = 'epoch'
 
