@@ -1,14 +1,16 @@
 import sys
 import os
 sys.path.append(os.path.abspath('.'))
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ['WANDB_DISABLED'] = 'true'
+
 
 from modules.data.dataset_utils import create_senteces_from_data, scale_datasets, tokenize_and_align_labels
 from modules.modeling.custom_modeling_roberta import  RobertaForInterleavedMultitask, RobertaForSilverLabelMultitask
 from transformers import AutoTokenizer, TrainingArguments, set_seed, AutoConfig
 from modules.modeling.custom_trainer import InterleavedMultitaskFinetuningTrainer
 from modules.modeling.custom_data_collator import DataCollatorForInterleavedMultiTask
-from datasets import Dataset, load_dataset
+from datasets import Dataset, load_dataset, load_from_disk
 from itertools import cycle
 import numpy as np
 import pandas as pd
@@ -19,6 +21,18 @@ import evaluate
 SEED = 42
 TASKS = ['firstfix_dur','dur','firstrun_nfix','nfix','firstrun_dur']
  
+TASK_TO_KEYS = {
+    "cola": ("sentence", None),
+    "mnli": ("premise", "hypothesis"),
+    "mrpc": ("sentence1", "sentence2"),
+    "qnli": ("question", "sentence"),
+    "qqp": ("question1", "question2"),
+    "rte": ("sentence1", "sentence2"),
+    "sst2": ("sentence", None),
+    "stsb": ("sentence1", "sentence2"),
+    "wnli": ("sentence1", "sentence2"),
+}
+
 
 def load_complexity_dataset(src_path:str) -> Dataset:
     df = pd.read_csv(src_path)
@@ -58,6 +72,35 @@ def load_dst_dataset_sentiment(tokenizer):
     tokenized_dataset = dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], batched=True, desc="Running tokenizer on dataset")
     
     return tokenized_dataset['train'], tokenized_dataset['validation']
+
+def load_dst_dataset_glue(task, tokenizer):
+    # dataset = load_dataset('nyu-mll/glue', task)
+    dataset = load_from_disk(os.path.join('data/glue', task))
+    dataset = dataset.rename_column('label', f'label_{task}')
+
+    def preprocess_dataset(downstream_task, dataset, tokenizer):
+        sentence1_key, sentence2_key = TASK_TO_KEYS[downstream_task]
+
+        def preprocess_function(examples):
+            args = ((examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key]))
+            return tokenizer(*args, padding=True, truncation=True)
+        
+        cols_to_remove = list(TASK_TO_KEYS[task]) if TASK_TO_KEYS[task][1] is not None else [TASK_TO_KEYS[task][0]]
+        cols_to_remove.append('idx') 
+        tokenized_dataset = dataset.map(preprocess_function, remove_columns=cols_to_remove, batched=True, desc="Running tokenizer on dataset")
+        return tokenized_dataset
+    
+    tokenized_dataset = preprocess_dataset(task, dataset, tokenizer)
+    train_dataset = tokenized_dataset['train']#.select(range(100))
+    if task == 'mnli':
+        eval_dataset ={
+            'validation_matched': tokenized_dataset['validation_matched'],
+            'validation_mismatched': tokenized_dataset['validation_mismatched']            
+        }
+    else:
+        eval_dataset = tokenized_dataset['validation']
+    return train_dataset, eval_dataset
+
 
 
 def load_eye_gaze_datasets(user_id, tokenizer):
@@ -132,45 +175,49 @@ def main():
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
-    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity'])
+    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
     parser.add_argument('-o', '--output_dir')
     args = parser.parse_args()
 
     set_seed(SEED)
-
-    model_string = args.model_name.split('/')[-1]
     
-
-    # model_out_dir = f'models/{args.downstream_task}/interleaved_multitask/{model_string}_pp{args.user_id}'
     model_out_dir = args.output_dir
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, add_prefix_space=True)
     
     eye_gaze_train, eye_gaze_test = load_eye_gaze_datasets(args.user_id, tokenizer)    
+    dst_label = f'label_{args.downstream_task}'
 
     if args.downstream_task == 'complexity':
         dst_train, dst_test = load_dst_dataset_complexity(tokenizer)
-        dst_label = 'label_complexity'
         downstream_type = 'regression'
         num_labels = 1
     elif args.downstream_task == 'sentiment':
         dst_train, dst_test = load_dst_dataset_sentiment(tokenizer)
-        dst_label = 'label_sentiment'
         downstream_type = 'classification'
         num_labels = 2
+    elif args.downstream_task in list(TASK_TO_KEYS.keys()):
+        dst_train, dst_test = load_dst_dataset_glue(args.downstream_task, tokenizer)
+        if args.downstream_task == 'stsb':
+            downstream_type = 'regression'
+            num_labels = 1
+        else:
+            num_labels = len(set(dst_train[dst_label]))
+            downstream_type = 'classification'
     else:
         raise Exception(f'Downstream task {args.downstream_task} not supported.')
+
 
     train_dataset = join_datasets(eye_gaze_train, dst_train, args.batch_size)
     test_dataset = {'eye_gaze': eye_gaze_test, 'dst': dst_test}
 
     data_collator = DataCollatorForInterleavedMultiTask(tokenizer, dst_label, [f'label_{task}' for task in TASKS])
     
-   
     mae = evaluate.load('mae')
     spearmanr = evaluate.load("spearmanr")
     accuracy = evaluate.load("accuracy")
+    glue_metric = evaluate.load("glue", args.downstream_task)
 
     def compute_metrics_eye_gaze(eval_pred):
         res = dict()
@@ -206,10 +253,23 @@ def main():
         predictions = np.argmax(logits, axis=-1)
         return accuracy.compute(predictions=predictions, references=labels)
     
+    def compute_metrics_glue(p):
+        # print('\n\n\n\nEVAL PRED\n')
+        # print('\n\n\n\n')
+        predictions = p.predictions[args.downstream_task]
+        preds = predictions[0] if isinstance(predictions, tuple) else predictions
+        preds = np.squeeze(preds) if downstream_type == 'regression' else np.argmax(preds, axis=1)
+        result = glue_metric.compute(predictions=preds, references=p.label_ids)
+        if len(result) > 1:
+            result["combined_score"] = np.mean(list(result.values())).item()
+        return result
+    
     if args.downstream_task == 'complexity':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_complexity}
     elif args.downstream_task == 'sentiment':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_accuracy}
+    elif args.downstream_task in list(TASK_TO_KEYS.keys()):
+        compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_glue}
     else:
         raise Exception(f'Downstream task {args.downstream_task} not supported.')
 
@@ -233,14 +293,13 @@ def main():
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         save_strategy='no'
-        #save_strategy='epoch',
         )
     
 
     trainer = InterleavedMultitaskFinetuningTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
+        train_dataset=train_dataset, #.select(range(100)),
         eval_dataset=test_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
