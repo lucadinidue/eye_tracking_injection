@@ -4,6 +4,8 @@ import argparse
 import json
 import os
 import re
+from IPython.display import display, HTML
+pd.set_option('display.max_rows', None)
 
 labels_map = {
     'full_model': 'ALL',
@@ -18,6 +20,12 @@ labels_map = {
     'sentiment_only': 'BL'
 }
 
+metrics_map = {
+    'sentiment': ['accuracy'],
+    'complexity': ['mae', 'spearmanr'],
+    'cola': ['matthews_correlation'],
+    'mnli':['mismatched_accuracy', 'matched_accuracy']
+}
 
 sns.set_style('darkgrid')
 
@@ -34,8 +42,24 @@ def parse_log_history_eval_metrics(log_history, task):
     elif task == 'sentiment':
         logs_dict = parse_log_history_sentiment(log_history)
     else:
-        raise Exception(f'Task {task} not implemented.')
+        logs_dict = parse_log_history_glue(log_history, task)
     return pd.DataFrame.from_dict(logs_dict)
+
+def parse_log_history_glue(log_history, task):
+    logs_dict = {'epoch': [], 'metric': [], 'score': []}
+    metrics = metrics_map[task]
+    for entry in log_history:
+        for metric in metrics:
+            for eval_entry in [f'eval_{metric}', f'eval_dst_{metric}']:
+                if eval_entry in entry:
+                    logs_dict['epoch'].append(entry['epoch'])
+                    logs_dict['metric'].append(metric)
+                    logs_dict['score'].append(entry[eval_entry])
+        # if 'eval_sentiment' in entry:
+        #     logs_dict['epoch'].append(entry['epoch'])
+        #     logs_dict['metric'].append('accuracy')
+        #     logs_dict['score'].append(entry['eval_sentiment']['accuracy'])
+    return logs_dict
 
 def parse_log_history_sentiment(log_history):
     logs_dict = {'epoch': [], 'metric': [], 'score': []}
@@ -65,6 +89,7 @@ def parse_log_history_complexity(log_history):
                 logs_dict['epoch'].append(entry['epoch'])
                 logs_dict['metric'].append(metric)
                 logs_dict['score'].append(entry[f'{prefix}{metric}'])
+
     return logs_dict
 
 def load_and_parse_trainer_state(model_dir, task):
@@ -79,17 +104,14 @@ def load_and_parse_trainer_state(model_dir, task):
     return metrics_df
 
 
-def load_baseline_scores(src_path, task):
+def load_baseline_scores(src_path, task, metrics):
     trainer_state = load_trainer_state(src_path)
     metrics_df = parse_log_history_eval_metrics(trainer_state['log_history'], task)
     last_epoch_scores = metrics_df[metrics_df['epoch'] == metrics_df['epoch'].max()]
-    if len(last_epoch_scores) == 2:
-        metrics = {
-            'mae': last_epoch_scores[last_epoch_scores['metric'] == 'mae']['score'].item(),
-            'spearmanr': last_epoch_scores[last_epoch_scores['metric'] == 'spearmanr']['score'].item()
-        }
-    else:
-        metrics = {'accuracy': last_epoch_scores[last_epoch_scores['metric'] == 'accuracy']['score'].item()}
+    try:
+        metrics = {metric: last_epoch_scores[last_epoch_scores['metric'] == metric]['score'].item() for metric in metrics}
+    except:
+        metrics = {metric: last_epoch_scores[last_epoch_scores['metric'] == f'eval_{metric}']['score'].item() for metric in metrics}
     return metrics
 
 def load_metrics_dataframe(src_dir, task):
@@ -101,7 +123,10 @@ def load_metrics_dataframe(src_dir, task):
                 if finetuning_config == 'lora' and 'adapters' not in user_dir_name:
                     continue
                 user_path = os.path.join(config_path, user_dir_name)
-                metrics_df = load_and_parse_trainer_state(user_path, task)
+                try:
+                    metrics_df = load_and_parse_trainer_state(user_path, task)
+                except:
+                    continue
                 metrics_df['model'] = finetuning_config
                 last_epoch_df = metrics_df[metrics_df['epoch'] == metrics_df['epoch'].max()]
                 metrics_dfs.append(last_epoch_df)     
@@ -124,19 +149,18 @@ def main():
     parser.add_argument('-t', '--downstream_task', type=str)
     args = parser.parse_args()
 
-    models_directory = f'models/{args.downstream_task}'
-    plots_out_dir = f'results/{args.downstream_task}'
+    models_directory = f'models/{args.downstream_task}/10epochs_lr1e-05'
+    plots_out_template = f'results/downstream_tasks/{args.downstream_task}'
     baseline_dir = f'models/{args.downstream_task}/roberta-base_baseline'
     
-    baseline_metrics = load_baseline_scores(baseline_dir, args.downstream_task)
+    metrics  = metrics_map[args.downstream_task] 
+
+    baseline_metrics = load_baseline_scores(baseline_dir, args.downstream_task, metrics)
     metrics_df = load_metrics_dataframe(models_directory, args.downstream_task)
 
-    if args.downstream_task == 'complexity':
-        metrics = ['mae', 'spearmanr']
-    elif args.downstream_task == 'sentiment':
-        metrics = ['accuracy']
-    else:
-        raise Exception(f'Task {args.downstream_task} not implemented.')
+    # metrics_df = metrics_df[['user', 'score', 'model', 'metric']]
+
+    #raise Exception(f'Task {args.downstream_task} not implemented.')
     for metric in metrics:
         metric_df = metrics_df[metrics_df['metric'] == metric]
         pivoted_df = metric_df.pivot(index='user', columns='model', values='score')
@@ -144,7 +168,10 @@ def main():
         clf_or_regressor_str = 'regressor_only' if 'regressor_only' in pivoted_df else 'classifier_only'
         pivoted_df = pivoted_df.reindex(['full_model', 'last_3', 'last_2', clf_or_regressor_str, 'lora', 'interleaved_multitask', 'silver_labels', f'{args.downstream_task}_only'], axis=1)
         pivoted_df = pivoted_df.rename(columns=labels_map)
-        plot_metrics(pivoted_df, metric, f'{plots_out_dir}/{metric}_comparison.png')
+        out_path = plots_out_template + f'_{metric}.png'
+
+        
+        plot_metrics(pivoted_df, metric, out_path)
     
 
     
