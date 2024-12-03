@@ -174,7 +174,7 @@ def main():
     parser.add_argument('-b', '--batch_size', type=int, default=16)
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
-    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
+    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.1)
     parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
     parser.add_argument('-o', '--output_dir')
@@ -210,7 +210,10 @@ def main():
 
 
     train_dataset = join_datasets(eye_gaze_train, dst_train, args.batch_size)
-    test_dataset = {'eye_gaze': eye_gaze_test, 'dst': dst_test}
+    if args.downstream_task == 'mnli':
+        test_dataset = {'eye_gaze': eye_gaze_test, 'dst_matched': dst_test['validation_matched'], 'dst_mismatched': dst_test['validation_mismatched']}
+    else:
+        test_dataset = {'eye_gaze': eye_gaze_test, 'dst': dst_test}
 
     data_collator = DataCollatorForInterleavedMultiTask(tokenizer, dst_label, [f'label_{task}' for task in TASKS])
     
@@ -254,8 +257,6 @@ def main():
         return accuracy.compute(predictions=predictions, references=labels)
     
     def compute_metrics_glue(p):
-        # print('\n\n\n\nEVAL PRED\n')
-        # print('\n\n\n\n')
         predictions = p.predictions[args.downstream_task]
         preds = predictions[0] if isinstance(predictions, tuple) else predictions
         preds = np.squeeze(preds) if downstream_type == 'regression' else np.argmax(preds, axis=1)
@@ -268,6 +269,8 @@ def main():
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_complexity}
     elif args.downstream_task == 'sentiment':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_accuracy}
+    elif args.downstream_task == 'mnli':
+        compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst_matched': compute_metrics_glue, 'dst_mismatched': compute_metrics_glue}
     elif args.downstream_task in list(TASK_TO_KEYS.keys()):
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_glue}
     else:
@@ -292,7 +295,8 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        save_strategy='no'
+        save_strategy='no',
+        warmup_ratio=0.06
         )
     
 

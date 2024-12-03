@@ -24,7 +24,12 @@ metrics_map = {
     'sentiment': ['accuracy'],
     'complexity': ['mae', 'spearmanr'],
     'cola': ['matthews_correlation'],
-    'mnli':['mismatched_accuracy', 'matched_accuracy']
+    'mnli':['mismatched_accuracy', 'matched_accuracy'],
+    'mrpc': ['accuracy', 'combined_score'],
+    'qnli': ['accuracy'],
+    'qqp': ['accuracy', 'combined_score'],
+    'rte': ['accuracy'],
+    'stsb': ['combined_score', 'pearson', 'spearmanr']
 }
 
 sns.set_style('darkgrid')
@@ -50,15 +55,11 @@ def parse_log_history_glue(log_history, task):
     metrics = metrics_map[task]
     for entry in log_history:
         for metric in metrics:
-            for eval_entry in [f'eval_{metric}', f'eval_dst_{metric}']:
+            for eval_entry in [f'eval_{metric}', f'eval_dst_{metric}', f'eval_validation_{metric}']:
                 if eval_entry in entry:
                     logs_dict['epoch'].append(entry['epoch'])
                     logs_dict['metric'].append(metric)
                     logs_dict['score'].append(entry[eval_entry])
-        # if 'eval_sentiment' in entry:
-        #     logs_dict['epoch'].append(entry['epoch'])
-        #     logs_dict['metric'].append('accuracy')
-        #     logs_dict['score'].append(entry['eval_sentiment']['accuracy'])
     return logs_dict
 
 def parse_log_history_sentiment(log_history):
@@ -160,7 +161,6 @@ def main():
 
     # metrics_df = metrics_df[['user', 'score', 'model', 'metric']]
 
-    #raise Exception(f'Task {args.downstream_task} not implemented.')
     for metric in metrics:
         metric_df = metrics_df[metrics_df['metric'] == metric]
         pivoted_df = metric_df.pivot(index='user', columns='model', values='score')

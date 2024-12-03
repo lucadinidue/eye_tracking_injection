@@ -2,6 +2,7 @@ import sys
 import os
 sys.path.append(os.path.abspath('.'))
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" 
+os.environ['WANDB_DISABLED'] = 'true'
 
 from modules.modeling.model_utils import get_tokenizer_name
 from transformers import (
@@ -13,6 +14,7 @@ from transformers import (
     Trainer,    
 )
 
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel
 from datasets import Dataset, load_dataset, load_from_disk
 import pandas as pd
 import numpy as np
@@ -53,9 +55,6 @@ def preprocess_dataset(downstream_task, dataset, label_to_id, tokenizer):
         )
         result = tokenizer(*args, padding=True, truncation=True)
         
-        # print(examples['label'])
-        # if label_to_id is not None and "label" in examples:
-        #     result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
         return result
 
     tokenized_dataset = dataset.map(preprocess_function, batched=True, desc="Running tokenizer on dataset")
@@ -67,8 +66,8 @@ def main():
     parser.add_argument('-m', '--model_path', dest='model_path')
     parser.add_argument('-b', '--batch_size', type=int, default=32)
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=5e-05)
-    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=3)
-    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
+    parser.add_argument('-e', '--epochs', dest='training_epochs', type=int)
+    parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.1)
     parser.add_argument('-f', '--freeze_layers', type=str, default=None)
     parser.add_argument('-o', '--output_dir')
     parser.add_argument('-t', '--downstream_task', type=str, choices=['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
@@ -83,9 +82,9 @@ def main():
         os.makedirs(output_dir)
 
     
-    # dataset = load_dataset('nyu-mll/glue', args.downstream_task)
+    dataset = load_dataset('nyu-mll/glue', args.downstream_task)
     # dataset.save_to_disk(os.path.join('data/glue', args.downstream_task))
-    dataset = load_from_disk(os.path.join('data/glue', args.downstream_task))
+    # dataset = load_from_disk(os.path.join('data/glue', args.downstream_task))
 
     is_regression = args.downstream_task == "stsb"
     if not is_regression:
@@ -102,11 +101,10 @@ def main():
 
 
     tokenized_dataset = preprocess_dataset(args.downstream_task, dataset, label_to_id, tokenizer)
+
     
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     
-
-
     metric = evaluate.load("glue", args.downstream_task)
 
     def compute_metrics(p):
@@ -120,12 +118,25 @@ def main():
     
     model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=num_labels)
 
-    if is_regression:
+    if not is_regression:
         model.config.label2id = label_to_id
         model.config.id2label = {id: label for label, id in label_to_id.items()}
 
 
-    if args.freeze_layers is not None:
+    if args.freeze_layers == 'lora':
+        lora_config = LoraConfig(
+            r=32,
+            lora_alpha=8,
+            target_modules=["query", "value"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.SEQ_CLS, # this is necessary
+            inference_mode=False
+        )
+        model = get_peft_model(model, lora_config)
+        output_dir = output_dir + '_adapters'
+
+    elif args.freeze_layers is not None:
         not_freeze_weights = FREEZE_LAYERS_MAP[args.freeze_layers]
         for name, param in model.named_parameters():
             requires_grad = False
@@ -135,7 +146,7 @@ def main():
             param.requires_grad = requires_grad
 
     
-    train_dataset = tokenized_dataset['train'].select(range(100))
+    train_dataset = tokenized_dataset['train']
     if args.downstream_task == 'mnli':
         eval_dataset ={
             'validation_matched': tokenized_dataset['validation_matched'],
@@ -154,10 +165,10 @@ def main():
         num_train_epochs=args.training_epochs,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        warmup_steps=500,
-        save_strategy='no'
+        warmup_ratio=0.06,
+        save_strategy='no' 
         )
-    
+
 
     trainer = Trainer(
         model=model,
@@ -171,6 +182,12 @@ def main():
     trainer.train()
     trainer.save_model(output_dir)
     trainer.save_state()
+
+    if args.freeze_layers == 'lora':
+        original_model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=num_labels)
+        original_with_adapter = PeftModel.from_pretrained(original_model, output_dir)
+        merged_model = original_with_adapter.merge_and_unload()
+        merged_model.save_pretrained(output_dir[:-len('_adapters')])   
 
 
 if __name__ == '__main__':
