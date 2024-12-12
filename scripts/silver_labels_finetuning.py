@@ -93,7 +93,7 @@ def prepare_sentiment_datasets(train_silver_labels_df, test_silver_labels_df, to
 
 
 def prepare_glue_dataset(task, train_silver_labels_df, test_silver_labels_df, tokenizer):
-     # dataset = load_dataset('nyu-mll/glue', task)
+    # dataset = load_dataset('nyu-mll/glue', task)
     datasets = load_from_disk(os.path.join('data/glue', task))
     datasets = datasets.rename_column('label', f'label_{task}')
 
@@ -193,7 +193,10 @@ def main():
    
     mae = evaluate.load('mae')
     spearmanr = evaluate.load('spearmanr')
-    glue_metric = evaluate.load("glue", args.downstream_task)
+    if args.downstream_task == 'sentiment':
+        glue_metric = evaluate.load("glue", 'sst2')
+    elif args.downstream_task in list(TASK_TO_KEYS.keys()):
+        glue_metric = evaluate.load("glue", args.downstream_task)
 
     def compute_metrics(eval_pred):
         res = dict()

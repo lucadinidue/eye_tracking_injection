@@ -28,16 +28,11 @@ def parse_log_history_loss(log_history):
     return pd.DataFrame.from_dict(logs_dict)
 
 
-
 def parse_log_history_eval_metrics(log_history):
     logs_dict = {'epoch': [], 'metric':[], 'score':[], 'label':[]}
     for el in log_history:
-        if 'eval_eye_gaze_loss' in el or 'eval_dst_loss' in el:
-            prefix = 'eval_label'
-            if 'eval_eye_gaze_loss' in el:
-                prefix = 'eval_eye_gaze_label_'
-            elif 'eval_dst_loss' in el:
-                prefix = 'eval_dst_label_'
+        if any('eval_label_' in k for k in el.keys()):
+            prefix = 'eval_label_'
             epoch = el['epoch']
             for k, v in el.items():
                 if k.startswith(prefix):
@@ -83,11 +78,10 @@ def save_heatmap(last_epoch_df, metric, out_path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--models_input_directory', type=str, help='Models input directory.')
-    parser.add_argument('-o', '--output_directory', type=str, help='Output directory.')
     args = parser.parse_args()
 
-    out_plot_dir = f'results/eye_tracking/{args.output_directory}'
-    
+    out_plot_dir = 'results/eye_tracking/'
+
     if not os.path.exists(out_plot_dir):
         os.makedirs(out_plot_dir)
 

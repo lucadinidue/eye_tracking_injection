@@ -29,7 +29,8 @@ metrics_map = {
     'qnli': ['accuracy'],
     'qqp': ['accuracy', 'combined_score'],
     'rte': ['accuracy'],
-    'stsb': ['combined_score', 'pearson', 'spearmanr']
+    'stsb': ['combined_score', 'pearson', 'spearmanr'],
+    'wnli': ['accuracy']
 }
 
 sns.set_style('darkgrid')
@@ -60,6 +61,20 @@ def parse_log_history_glue(log_history, task):
                     logs_dict['epoch'].append(entry['epoch'])
                     logs_dict['metric'].append(metric)
                     logs_dict['score'].append(entry[eval_entry])
+        if task == 'mnli':
+            if 'eval_validation_matched_mnli' in entry:
+                logs_dict['epoch'].append(entry['epoch'])
+                logs_dict['metric'].append('matched_accuracy')
+                logs_dict['score'].append(entry['eval_validation_matched_mnli']['accuracy'])
+            elif 'eval_validation_mismatched_mnli' in entry:
+                logs_dict['epoch'].append(entry['epoch'])
+                logs_dict['metric'].append('mismatched_accuracy')
+                logs_dict['score'].append(entry['eval_validation_mismatched_mnli']['accuracy'])
+        elif f'eval_{task}' in entry:
+            for metric in metrics:
+                logs_dict['epoch'].append(entry['epoch'])
+                logs_dict['metric'].append(metric)
+                logs_dict['score'].append(entry[f'eval_{task}'][metric])
     return logs_dict
 
 def parse_log_history_sentiment(log_history):
