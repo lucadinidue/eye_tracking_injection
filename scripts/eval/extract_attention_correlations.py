@@ -105,12 +105,13 @@ def main():
      
     all_correlations_dict = init_correlations_dict(args.output_path, args.model_string)
 
-    if '1.json' in os.listdir(args.models_input_directory): # model not finetuned on eye-tracking
-        eye_tracking_path = os.path.join(eye_tracking_dir, f'pp21_dataset_test.csv')
-        eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
-        correlation_dict = compute_attention_correlation(args.models_input_directory, eye_tracking_data, args.positive_correlation)
-        user_id = 'no'
-        all_correlations_dict[args.model_string][user_id] = correlation_dict
+    if '1.json' in os.listdir(args.models_input_directory):
+        for user_file_name in os.listdir(eye_tracking_dir):
+            user_id = int(user_file_name[2:4])
+            eye_tracking_path = os.path.join(eye_tracking_dir, user_file_name)
+            eye_tracking_data = load_eye_tracking_data(eye_tracking_path, args.eye_tracking_feature)
+            correlation_dict = compute_attention_correlation(args.models_input_directory, eye_tracking_data, args.positive_correlation)
+            all_correlations_dict[args.model_string][user_id] = correlation_dict
     else:
         for model_name in os.listdir(args.models_input_directory):
             model_dir = os.path.join(args.models_input_directory, model_name)
