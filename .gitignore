@@ -4,3 +4,4 @@ attentions/*
 .ipynb_checkpoints/
 __pycache__
 nohup.out
+*ipynb
