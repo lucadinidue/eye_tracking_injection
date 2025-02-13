@@ -144,14 +144,20 @@ def main():
         compute_metrics=compute_metrics,
     )
 
-    trainer.train()
-    trainer.save_model(output_dir+'_adapters')
-    trainer.save_state()
+    for name, param in model.named_parameters():
+        if 'query' in name or 'key' in name or 'value' in name:
+            print(f"Nome: {name}, Shape: {param.shape}, Num. parametri: {param.numel()}")
 
-    original_model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=num_labels)
-    original_with_adapter = PeftModel.from_pretrained(original_model, output_dir+'_adapters')
-    merged_model = original_with_adapter.merge_and_unload()
-    merged_model.save_pretrained(output_dir)    
+        # if param.requires_grad:
+
+    # trainer.train()
+    # trainer.save_model(output_dir+'_adapters')
+    # trainer.save_state()
+
+    # original_model = AutoModelForSequenceClassification.from_pretrained(args.model_path, num_labels=num_labels)
+    # original_with_adapter = PeftModel.from_pretrained(original_model, output_dir+'_adapters')
+    # merged_model = original_with_adapter.merge_and_unload()
+    # merged_model.save_pretrained(output_dir)    
     
 
 

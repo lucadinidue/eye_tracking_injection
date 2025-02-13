@@ -22,13 +22,14 @@ labels_map = {
 
 metrics_map = {
     'sentiment': ['accuracy'],
-    'complexity': ['mae', 'spearmanr'],
+    'complexity': ['spearmanr'],
     'cola': ['matthews_correlation'],
     'mnli':['mismatched_accuracy', 'matched_accuracy'],
     'mrpc': ['accuracy', 'combined_score'],
     'qnli': ['accuracy'],
     'qqp': ['accuracy', 'combined_score'],
     'rte': ['accuracy'],
+    'sst2': ['accuracy'],
     'stsb': ['combined_score', 'pearson', 'spearmanr'],
     'wnli': ['accuracy']
 }
@@ -95,13 +96,13 @@ def parse_log_history_complexity(log_history):
     logs_dict = {'epoch': [], 'metric': [], 'score': []}
     for entry in log_history:
         if 'eval_complexity' in entry:
-            for metric in ['mae', 'spearmanr']:
+            for metric in ['spearmanr']:
                 logs_dict['epoch'].append(entry['epoch'])
                 logs_dict['metric'].append(metric)
                 logs_dict['score'].append(entry['eval_complexity'][metric])
         elif 'eval_loss' in entry or 'eval_dst_loss' in entry:
             prefix = 'eval_' if 'eval_loss' in entry else 'eval_dst_'
-            for metric in ['mae', 'spearmanr']:
+            for metric in ['spearmanr']:
                 logs_dict['epoch'].append(entry['epoch'])
                 logs_dict['metric'].append(metric)
                 logs_dict['score'].append(entry[f'{prefix}{metric}'])
@@ -133,16 +134,20 @@ def load_baseline_scores(src_path, task, metrics):
 def load_metrics_dataframe(src_dir, task):
     metrics_dfs = []
     for finetuning_config in os.listdir(src_dir):
+        print(finetuning_config)
+        if finetuning_config == 'error_silver_labels':
+            continue
         config_path = os.path.join(src_dir, finetuning_config)
         if not 'trainer_state.json' in os.listdir(config_path):
             for user_dir_name in os.listdir(config_path):
                 if finetuning_config == 'lora' and 'adapters' not in user_dir_name:
                     continue
                 user_path = os.path.join(config_path, user_dir_name)
-                try:
-                    metrics_df = load_and_parse_trainer_state(user_path, task)
-                except:
-                    continue
+                # try:
+                metrics_df = load_and_parse_trainer_state(user_path, task)
+                # except Exception as e:
+                #     print(e)
+                #     continue
                 metrics_df['model'] = finetuning_config
                 last_epoch_df = metrics_df[metrics_df['epoch'] == metrics_df['epoch'].max()]
                 metrics_dfs.append(last_epoch_df)     
@@ -185,6 +190,10 @@ def main():
         pivoted_df = pivoted_df.rename(columns=labels_map)
         out_path = plots_out_template + f'_{metric}.png'
 
+        # # print(pivoted_df)
+        print('\n\n\n')
+        print(metric)
+        print(pivoted_df.mean(axis=0))
         
         plot_metrics(pivoted_df, metric, out_path)
     

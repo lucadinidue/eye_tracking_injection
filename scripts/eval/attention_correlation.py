@@ -148,7 +148,7 @@ def main():
     args = parser.parse_args()
 
     eye_tracking_dir = 'data/geco/dataset/'
-    plot_path = f'results/{args.attention_type}/{args.output_file}.png'
+    plot_path = f'results/{args.attention_type}_{args.eye_tracking_feature}/{args.output_file}.png'
     
     grouping_variable = 'epoch'
 

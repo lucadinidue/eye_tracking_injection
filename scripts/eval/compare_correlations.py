@@ -73,13 +73,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-t', '--downstream_task', type=str, default='base')
     parser.add_argument('-a', '--attention_type', type=str, choices=['attention', 'valuezeroing'])
+    parser.add_argument('-f', '--eye_tracking_feature', type=str, help='Eye-tracking feature used to compute correlation.')
     parser.add_argument('-c', '--model_config')
     args = parser.parse_args()
 
-    correlations_dir_name = 'attentions' if args.attention_type == 'attention' else 'valuezeroing'
+    # correlations_dir_name = 'attentions' if args.attention_type == 'attention' else 'valuezeroing'
 
-    json_correlations_path = f'{correlations_dir_name}/all_correlations_{args.downstream_task}_{args.model_config}.json'
-    output_path = f'results/attention_correlations/{args.attention_type}_{args.downstream_task}.png'
+    # json_correlations_path = f'{correlations_dir_name}/all_correlations_{args.downstream_task}_{args.model_config}.json'
+    json_correlations_path = f'{args.attention_type}/{args.eye_tracking_feature}/all_correlations_{args.downstream_task}_{args.model_config}.json'
+    output_path = f'results/{args.attention_type}_{args.eye_tracking_feature}/{args.attention_type}_{args.downstream_task}.png'
 
     correlations_dict = load_json(json_correlations_path)
     correlations_df = convert_dict_to_df(correlations_dict)
@@ -103,6 +105,7 @@ def main():
             pivoted_df = user_df.pivot(index='model', columns='layer', values='score')
             pivoted_df = pivoted_df.reindex(['base', f'{args.downstream_task}_full', f'{args.downstream_task}_last_3', f'{args.downstream_task}_last_2', f'{args.downstream_task}_lora', f'{args.downstream_task}_interleaved', f'{args.downstream_task}_silver_labels', f'{args.downstream_task}_only'])
             pivoted_df['avg'] = pivoted_df.mean(axis=1)
+            # pivoted_df['max'] = pivoted_df.max(axis=1)
 
             plot = sns.heatmap(pivoted_df, annot=True, cmap='crest', cbar=False, ax=axes[idx], vmin=vmin, vmax=vmax)
             plot.set_title(f'User {user}')

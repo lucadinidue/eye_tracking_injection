@@ -67,12 +67,13 @@ def save_lineplot(data, x, y, hue, title, out_path):
 
 
 def save_heatmap(last_epoch_df, metric, out_path):
-    pivoted_df = last_epoch_df.pivot(index='user', columns='label', values='score')   
+    pivoted_df = last_epoch_df.pivot(index='user', columns='label', values='score') 
+    print(pivoted_df)  
     cmap = 'crest' if metric == 'spearmanr' else 'crest_r'
     p = sns.heatmap(data=pivoted_df, annot=True, cmap=cmap, cbar=False)
     p.set_title(metric.upper())
     p.figure.tight_layout()
-    p.figure.savefig(out_path)
+    # p.figure.savefig(out_path)
     p.cla()
 
 def main():
