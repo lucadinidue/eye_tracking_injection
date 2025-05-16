@@ -46,7 +46,7 @@ def extract_sentence_attention(model: AutoModelForMaskedLM, tokenized_text:Batch
         if sentence_aggregation_method == 'avg':
             sentence_attention = torch.mean(avg_attention_matrix, dim=0).tolist()
         elif sentence_aggregation_method == 'cls':
-            sentence_attention = avg_attention_matrix[:,0].tolist()
+            sentence_attention = avg_attention_matrix[0].tolist()
         else:
             raise Exception(f'Method {sentence_aggregation_method} not implemented')
         sentence_attention = aggregate_tokens_attention(sentence_attention, alignment_ids)
