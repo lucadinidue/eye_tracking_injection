@@ -18,6 +18,7 @@ device = 'cuda:0'
 TASKS = ['firstfix_dur','dur','firstrun_nfix','nfix','firstrun_dur']
 
 TASK_TO_KEYS = {
+    "coherence": ("text", None),
     "complexity": ("SENTENCE", None),
     "sentiment": ("sentence", None),
     "cola": ("sentence", None),
@@ -37,6 +38,25 @@ def load_complexity_dataset(src_path:str) -> Dataset:
     df['label'] = df[annotators_columns].mean(axis=1)
     df = df[['SENTENCE', 'label']]
     return Dataset.from_pandas(df)
+
+def load_coherehnce_dataset(src_path:str) -> Dataset:
+    df = pd.read_csv(src_path, sep='\t')
+    labels = sorted(set(df["label"]))
+    label2id = {l: i for i, l in enumerate(labels)}
+    df['label'] = df['label'].map(label2id)
+    df = df.rename(columns={'passage_id':'idx', 'label':'label_coherence'})
+    df = df[['idx', 'text', 'label_coherence']]
+    return Dataset.from_pandas(df)
+    # dataset = load_dataset('csv', data_files={'train':train_path, 'validation':test_path}, sep='\t')
+    #     dataset = dataset.rename_column("passage_id", "idx")
+    #     labels = sorted(set(dataset["train"]["label"]))
+    #     label2id = {l: i for i, l in enumerate(labels)}
+
+    #     def encode_labels(example):
+    #         example["label"] = label2id[example["label"]]
+    #         return example
+
+    #     dataset = dataset.map(encode_labels)
 
 
 def add_dummy_eye_gaze_features(example):
@@ -65,7 +85,7 @@ def prepare_dataset_and_predict(dataset, downstream_task, tokenizer, output_path
 
     def preprocess_function(examples):
         args = ((examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key]))
-        return tokenizer(*args, padding=True, truncation=True)
+        return tokenizer(*args, padding=True, truncation=True, max_length=256)
     
     cols_to_remove = list(TASK_TO_KEYS[downstream_task]) if TASK_TO_KEYS[downstream_task][1] is not None else [TASK_TO_KEYS[downstream_task][0]]
     cols_to_remove.append('idx') 
@@ -79,7 +99,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_path')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int)
-    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
+    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli', 'coherence'])
+    parser.add_argument('-x', '--text_domain', default='wiki', choices=['wiki', 'fanfic', 'ted', 'news'])
     args = parser.parse_args()
 
     output_dir = f'data/silver_labels/{args.downstream_task}'
@@ -90,7 +111,12 @@ def main():
         train_path = 'data/complexity/complexity_ds_en_train.csv'
         test_path = 'data/complexity/complexity_ds_en_test.csv'
         train_dataset = load_complexity_dataset(train_path)
-        test_dataset = load_complexity_dataset(test_path)        
+        test_dataset = load_complexity_dataset(test_path)  
+    elif args.downstream_task == 'coherence':
+        train_path =  f'data/coherence/{args.text_domain}/en_train.tsv'
+        test_path = f'data/coherence/{args.text_domain}/en_eval.tsv'
+        train_dataset = load_coherehnce_dataset(train_path)
+        test_dataset = load_coherehnce_dataset(test_path)
     elif args.downstream_task in list(TASK_TO_KEYS.keys()):
         dataset = load_dataset('nyu-mll/glue', args.downstream_task)
         train_dataset = dataset['train']

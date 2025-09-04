@@ -18,6 +18,7 @@ TASKS = ['firstfix_dur','dur','firstrun_nfix','nfix','firstrun_dur']
 
 
 TASK_TO_KEYS = {
+    "coherence": ("text", None),
     "cola": ("sentence", None),
     "mnli": ("premise", "hypothesis"),
     "mrpc": ("sentence1", "sentence2"),
@@ -84,13 +85,46 @@ def prepare_sentiment_datasets(train_silver_labels_df, test_silver_labels_df, to
 
 
     def preprocess_function(examples):
-        return tokenizer(examples['sentence'], truncation=True, padding=True)
+        return tokenizer(examples['sentence'], truncation=True)
 
     tokenized_train_dataset = train_dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], desc="Running tokenizer on train dataset")
     tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['sentence', 'idx'], desc="Running tokenizer on train dataset")
 
     return tokenized_train_dataset, tokenized_test_dataset
 
+def prepare_coherence_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer, text_domain):
+    data_files = {'train': f'data/coherence/{text_domain}/en_train.tsv',
+                  'validation': f'data/coherence/{text_domain}/en_eval.tsv'}
+    
+    dataset = load_dataset('csv', data_files=data_files, sep='\t')
+    dataset = dataset.rename_column("label", "label_coherence")
+
+    dst_train_df = dataset['train'].to_pandas()
+    dst_test_df = dataset['validation'].to_pandas()
+
+    train_df_joined = join_dataframes(dst_train_df, train_silver_labels_df)
+    test_df_joined = join_dataframes(dst_test_df, test_silver_labels_df)
+
+    train_dataset = Dataset.from_pandas(train_df_joined)
+    test_dataset = Dataset.from_pandas(test_df_joined)
+
+    unique = sorted(set(train_dataset['label_coherence']))  
+    label2id = {label: i for i, label in enumerate(unique)}
+
+    def encode_labels(example):
+        example['label_coherence'] = int(label2id[example['label_coherence']])  
+        return example
+
+    train_dataset = train_dataset.map(encode_labels)
+    test_dataset  = test_dataset.map(encode_labels)
+
+    def preprocess_function(examples):
+        return tokenizer(examples['text'], truncation=True, padding='max_length', max_length=256)
+
+    tokenized_train_dataset = train_dataset.map(preprocess_function, remove_columns=['text', 'passage_id'], desc="Running tokenizer on train dataset")
+    tokenized_test_dataset = test_dataset.map(preprocess_function, remove_columns=['text', 'passage_id'], desc="Running tokenizer on train dataset")
+
+    return tokenized_train_dataset, tokenized_test_dataset
 
 def prepare_glue_dataset(task, train_silver_labels_df, test_silver_labels_df, tokenizer):
     # dataset = load_dataset('nyu-mll/glue', task)
@@ -140,11 +174,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model_name', dest='model_name', type=str, default='FacebookAI/roberta-base')
     parser.add_argument('-u', '--user_id', dest='user_id', type=int, default=21)
-    parser.add_argument('-b', '--batch_size', type=int, default=16)
+    parser.add_argument('-b', '--batch_size', type=int, default=2)#16)
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=1.0)
-    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
+    parser.add_argument('-x', '--text_domain', default='wiki', choices=['wiki', 'fanfic', 'ted', 'news'])
+    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli', 'coherence'])
     parser.add_argument('-o', '--output_path')
     args = parser.parse_args()
 
@@ -178,6 +213,10 @@ def main():
         downstream_type = 'classification'
         num_labels = 2
         train_dataset, test_dataset =  prepare_sentiment_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer)
+    elif args.downstream_task == 'coherence':
+        downstream_type = 'classification'
+        train_dataset, test_dataset = prepare_coherence_datasets(train_silver_labels_df, test_silver_labels_df, tokenizer, text_domain=args.text_domain)
+        num_labels = len(set(train_dataset[dst_label]))
     elif args.downstream_task in list(TASK_TO_KEYS.keys()):
         train_dataset, test_dataset = prepare_glue_dataset(args.downstream_task, train_silver_labels_df, test_silver_labels_df, tokenizer)
         if args.downstream_task == 'stsb':
@@ -195,15 +234,19 @@ def main():
     spearmanr = evaluate.load('spearmanr')
     if args.downstream_task == 'sentiment':
         glue_metric = evaluate.load("glue", 'sst2')
+    elif args.downstream_task == 'coherence':
+        glue_metric = evaluate.load("accuracy")
     elif args.downstream_task in list(TASK_TO_KEYS.keys()):
         glue_metric = evaluate.load("glue", args.downstream_task)
 
     def compute_metrics(eval_pred):
         res = dict()
         for task_idx, task in enumerate([f'{task}' for task in TASKS] + [args.downstream_task]):
-            if task not in list(TASK_TO_KEYS.keys())+['sentiment']:
+
+            if task not in list(TASK_TO_KEYS.keys())+['sentiment', 'coherence']:
                 labels = eval_pred.label_ids[task_idx].flatten()
                 predictions = eval_pred.predictions[task].squeeze().flatten()
+
                 if task != 'complexity':
                     not_masked_labels = labels != -100
                     labels = labels[not_masked_labels]
@@ -249,7 +292,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        eval_dataset=test_dataset, #.select(range(100)),
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )

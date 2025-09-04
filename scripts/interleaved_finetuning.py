@@ -101,6 +101,32 @@ def load_dst_dataset_glue(task, tokenizer):
         eval_dataset = tokenized_dataset['validation']
     return train_dataset, eval_dataset
 
+def load_dst_dataset_coherence(tokenizer, text_domain):
+    data_files = {'train': f'data/coherence/{text_domain}/en_train.tsv',
+                  'validation': f'data/coherence/{text_domain}/en_eval.tsv'}
+    
+    dataset = load_dataset('csv', data_files=data_files, sep='\t')
+    
+    label_list = list(set(dataset['train']['label']))
+    label_list.sort()
+
+    label_to_id = {v: i for i, v in enumerate(label_list)}
+
+    def preprocessing_function(examples):
+        result = tokenizer(examples['text'], padding=True, truncation=True)
+        result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
+        return result
+
+    tokenized_dataset = dataset.map(
+        preprocessing_function,
+        batched=True,
+        remove_columns=['passage_id', 'text'],
+        desc="Running tokenizer on dataset",
+    )
+
+    tokenized_dataset = tokenized_dataset.rename_column('label', f'label_coherence')
+
+    return tokenized_dataset['train'], tokenized_dataset['validation']
 
 
 def load_eye_gaze_datasets(user_id, tokenizer):
@@ -175,7 +201,8 @@ def main():
     parser.add_argument('-l', '--learning_rate', dest='learning_rate', type=float, default=1e-05)
     parser.add_argument('-e', '--epochs', dest='training_epochs', type=int, default=10)
     parser.add_argument('-d', '--weight_decay', dest='weight_decay', type=float, default=0.1)
-    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli'])
+    parser.add_argument('-t', '--downstream_task', dest='downstream_task', type=str, choices=['sentiment', 'complexity', 'cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnli', 'coherence'])
+    parser.add_argument('-x', '--text_domain', default='wiki', choices=['wiki', 'fanfic', 'ted', 'news'])
     parser.add_argument('-w', '--weighted_loss', dest='weighted_loss', action='store_true')
     parser.add_argument('-o', '--output_dir')
     args = parser.parse_args()
@@ -197,6 +224,10 @@ def main():
         dst_train, dst_test = load_dst_dataset_sentiment(tokenizer)
         downstream_type = 'classification'
         num_labels = 2
+    elif args.downstream_task == 'coherence':
+        dst_train, dst_test = load_dst_dataset_coherence(tokenizer, args.text_domain)
+        downstream_type = 'classification'
+        num_labels = 11
     elif args.downstream_task in list(TASK_TO_KEYS.keys()):
         dst_train, dst_test = load_dst_dataset_glue(args.downstream_task, tokenizer)
         if args.downstream_task == 'stsb':
@@ -220,7 +251,8 @@ def main():
     mae = evaluate.load('mae')
     spearmanr = evaluate.load("spearmanr")
     accuracy = evaluate.load("accuracy")
-    glue_metric = evaluate.load("glue", args.downstream_task)
+    if args.downstream_task in list(TASK_TO_KEYS.keys()):
+        glue_metric = evaluate.load("glue", args.downstream_task)
 
     def compute_metrics_eye_gaze(eval_pred):
         res = dict()
@@ -248,6 +280,15 @@ def main():
                 'spearmanr': spearmanr.compute(predictions=logits, references=labels)['spearmanr']
             }           
         return res
+    
+    def compute_metrics_coherence(eval_pred):
+        preds = eval_pred.predictions['coherence'][0] if isinstance(eval_pred.predictions['coherence'], tuple) else eval_pred.predictions['coherence']
+        preds = np.argmax(preds, axis=1)
+        result = accuracy.compute(predictions=preds, references=eval_pred.label_ids)
+        if len(result) > 1:
+            result["combined_score"] = np.mean(list(result.values())).item()
+
+        return result
 
     def compute_metrics_accuracy(eval_pred):
         logits, labels = eval_pred
@@ -269,6 +310,8 @@ def main():
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_complexity}
     elif args.downstream_task == 'sentiment':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_accuracy}
+    elif args.downstream_task == 'coherence':
+        compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst': compute_metrics_coherence}
     elif args.downstream_task == 'mnli':
         compute_metrics = {'eye_gaze': compute_metrics_eye_gaze, 'dst_matched': compute_metrics_glue, 'dst_mismatched': compute_metrics_glue}
     elif args.downstream_task in list(TASK_TO_KEYS.keys()):
@@ -303,7 +346,7 @@ def main():
     trainer = InterleavedMultitaskFinetuningTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset, #.select(range(100)),
+        train_dataset=train_dataset,
         eval_dataset=test_dataset,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
