@@ -44,8 +44,8 @@ def load_coherehnce_dataset(src_path:str) -> Dataset:
     labels = sorted(set(df["label"]))
     label2id = {l: i for i, l in enumerate(labels)}
     df['label'] = df['label'].map(label2id)
-    df = df.rename(columns={'passage_id':'idx', 'label':'label_coherence'})
-    df = df[['idx', 'text', 'label_coherence']]
+    df = df.rename(columns={'passage_id':'idx'})
+    df = df[['idx', 'text', 'label']]
     return Dataset.from_pandas(df)
     # dataset = load_dataset('csv', data_files={'train':train_path, 'validation':test_path}, sep='\t')
     #     dataset = dataset.rename_column("passage_id", "idx")
@@ -133,7 +133,7 @@ def main():
     model = RobertaForMultiTaskTokenClassification.from_pretrained(args.model_path)
     tokenizer = AutoTokenizer.from_pretrained('FacebookAI/roberta-base', add_prefix_space=True)
     data_collator = DataCollatorForMultiTaskTokenClassification(tokenizer=tokenizer)
-    
+
     train_output_path = os.path.join(output_dir, f'train_{args.user_id}.pkl')
     prepare_dataset_and_predict(train_dataset, args.downstream_task, tokenizer, train_output_path, model, data_collator)
 
