@@ -425,7 +425,7 @@ class RobertaForInterleavedMultitask(RobertaPreTrainedModel):
         )
 
 
-class AutomaticWeightedLoss(nn.Module):
+class AutomaticWeightedLossOLD(nn.Module):
     """
     Automatically weighted multi-task loss.
 
@@ -442,7 +442,7 @@ class AutomaticWeightedLoss(nn.Module):
         loss_sum = awl(loss1, loss2)
     """
     def __init__(self, num=2):
-        super(AutomaticWeightedLoss, self).__init__()
+        super(AutomaticWeightedLossOLD, self).__init__()
         # Initialize parameters for weighting each loss, with gradients enabled
         params = torch.ones(num, requires_grad=True)
         self.params = nn.Parameter(params)
@@ -458,15 +458,60 @@ class AutomaticWeightedLoss(nn.Module):
             torch.Tensor: The combined weighted loss.
         """
         loss_sum = 0
+        print('\n\n\n WEIGHTED LOSS')
         for i, loss in enumerate(losses):
+            print(f'\n\nLoss {i}:', loss)
             # Compute the weighted loss component for each task
             weighted_loss = 0.5 / (self.params[i] ** 2) * loss
+            print(f'Weighted Loss {i}:', weighted_loss)
             # Add a regularization term to encourage the learning of useful weights
             regularization = torch.log(1 + self.params[i] ** 2)
+            print(f'Regularization {i}:', regularization)
             # Sum the weighted loss and the regularization term
             loss_sum += weighted_loss + regularization
+            print(f'Loss Sum{i}:', loss_sum)
 
         return loss_sum
+
+# class AutomaticWeightedLoss(nn.Module):
+#     def __init__(self, num=2):
+#         super().__init__()
+#         # start at 1.0 so 1/p^2 = 1 initially
+#         self.params = nn.Parameter(torch.ones(num))
+
+#     def forward(self, *losses):
+#         loss_sum = 0.0
+#         p = self.params.float()
+#         p2 = (p * p).clamp(min=1e-6, max=1e6)  # avoid 1/0 and huge numbers
+
+#         for i, loss in enumerate(losses):
+#             li = loss.float()
+#             weighted = 0.5 * (li / p2[i])
+#             reg = torch.log1p(p2[i])           # = log(1 + p^2), stable
+#             loss_sum = loss_sum + weighted + reg
+
+#         return torch.nan_to_num(loss_sum, nan=0.0, posinf=1e4, neginf=0.0)
+
+
+class AutomaticWeightedLoss(nn.Module):
+    def __init__(self, num=2):
+        super().__init__()
+        # 0 -> sigma^2 = 1 for all tasks
+        self.log_sigma2 = nn.Parameter(torch.zeros(num))
+
+    def forward(self, *losses):
+        # do this in fp32 even if the rest is mixed precision
+        ls2 = self.log_sigma2.float().clamp(min=-10.0, max=10.0)  # keeps exp() sane
+        sigma2 = torch.exp(ls2)                                    # variance per task
+
+        total = 0.0
+        for i, L in enumerate(losses):
+            Li = L.float()
+            total = total + 0.5 * (Li / sigma2[i] + ls2[i])
+
+        # cheap seatbelt
+        return torch.nan_to_num(total, nan=0.0, posinf=1e4, neginf=0.0)
+
 
 
 class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
@@ -550,6 +595,10 @@ class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
         # DST LOSS
             
         dst_logits = self.sentence_classifier(sequence_output)
+
+        # print('dst logits')
+        # print(dst_logits)
+
         logits[self.downstream_task] = dst_logits
 
         if self.config.downstream_type == "regression":
@@ -559,6 +608,9 @@ class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
 
         dst_labels = dst_labels.to(dst_logits.device)
 
+        # print('\n\ndst labels')
+        # print(dst_labels)
+
         if self.config.downstream_type == "regression":
             loss_fct = MSELoss()
             dst_loss = loss_fct(dst_logits.squeeze(), dst_labels.squeeze())
@@ -566,17 +618,29 @@ class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
             loss_fct = CrossEntropyLoss()
             dst_loss = loss_fct(dst_logits.view(-1, self.config.num_labels), dst_labels.view(-1))
 
+        # print('\n\ndst loss')
+        # print(dst_loss)
     
         token_loss = 0
         sequence_output = self.dropout(sequence_output)
+
+        # print('\n\n sequence output tokens')
+        # print(sequence_output)
 
        # EYE GAZE LOSS
 
         for task in self.token_tasks:
             task_logits = self.token_classifiers[task](sequence_output)
             logits[task] = task_logits
+
+            # print('\n\ntask:', task)
+            # print('\n\ntask logits:')
+            # print(task_logits)
+
             if labels[task] is not None:
                 task_labels = labels[task].to(task_logits.device)
+                # print('\n\ntask labels:')
+                # print(task_labels)
                 # TODO: mask out the output associated with not-first-token of a word
                 # ERROR: check dimensionalities
                 output_, target_ = mask_loss(task_logits, task_labels, -100)
@@ -585,6 +649,9 @@ class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
                 loss_fct = MSELoss()
                 task_mse_loss = loss_fct(output_, target_)
                 
+                # print('\n\ntask mse loss:')
+                # print(task_mse_loss)
+
                 #loss += loss_weights[idx] * task_mse_loss
                 token_loss += task_mse_loss
 
@@ -594,10 +661,21 @@ class RobertaForSilverLabelMultitask(RobertaPreTrainedModel):
                     loss_fct = L1Loss()
                     mae_loss[task] = loss_fct(output_, target_)
 
+            # print('TASK:', task)
+            # print('LOGITS:', task_logits)
+            # print('LABELS:', task_labels)
+
         token_loss /= len(self.token_tasks) 
+
+        # print('\n\ntoken loss')
+        # print(token_loss)
 
         loss = self.automated_weighted_loss(dst_loss, token_loss)
 
+        # print('\n\ntotal loss')
+        # print(loss)
+
+        # exit(0)
         # No need to average the loss since we are weighting it
         # loss /= self.num_tasks
 
